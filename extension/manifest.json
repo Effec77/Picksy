@@ -1,0 +1,33 @@
+{
+    "manifest_version": 3,
+    "name": "Picksy",
+    "description": "Cross-site shopping assistant: extract product info, compare, and recommend with trust signals.",
+    "version": "0.1.0",
+    "action": {
+      "default_title": "Picksy",
+      "default_popup": "src/popup/popup.html"
+    },
+    "background": {
+      "service_worker": "src/background/background.js",
+      "type": "module"
+    },
+    "icons": {
+      "16": "assets/logo.png",
+      "48": "assets/logo.png",
+      "128": "assets/logo.png"
+    },
+    "permissions": ["storage", "activeTab", "scripting", "tabs"],
+    "host_permissions": ["<all_urls>"],
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["src/content/content.js"],
+        "run_at": "document_idle"
+      }
+    ],
+    "options_ui": {
+      "page": "src/popup/popup.html",
+      "open_in_tab": false
+    }
+  }
+  
