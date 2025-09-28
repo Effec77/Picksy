@@ -1,38 +1,168 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <meta charset="UTF-8" />
   <title>Picksy</title>
   <style>
     body {
       font-family: Arial, sans-serif;
-      width: 300px;
+      width: 400px;
       padding: 10px;
+      max-height: 600px;
+      overflow-y: auto;
     }
+
     button {
       margin-top: 5px;
       padding: 5px 10px;
       cursor: pointer;
+      border: none;
+      border-radius: 3px;
+      background: #007cba;
+      color: white;
     }
+
+    button:hover {
+      background: #005a87;
+    }
+
     .product {
       border: 1px solid #ddd;
       border-radius: 5px;
       padding: 8px;
       margin-top: 8px;
     }
-    .saved {
-      margin-top: 12px;
+
+    .currency-toggle {
+      display: flex;
+      gap: 5px;
+      margin: 10px 0;
+    }
+
+    .currency-btn {
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+
+    .currency-btn.active {
+      background: #28a745;
+    }
+
+    .comparison-section {
+      background: #f8f9fa;
+      padding: 8px;
+      border-radius: 5px;
+      margin: 8px 0;
+    }
+
+    .comparison-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #eee;
+    }
+
+    .comparison-item:last-child {
+      border-bottom: none;
+    }
+
+    .chart-container {
+      margin: 10px 0;
+      height: 200px;
+    }
+
+    .stock-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 5px;
+    }
+
+    .stock-in {
+      background: #28a745;
+    }
+
+    .stock-out {
+      background: #dc3545;
+    }
+
+    .stock-unknown {
+      background: #6c757d;
+    }
+
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+      margin-bottom: 10px;
+    }
+
+    .tab {
+      padding: 8px 12px;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: #666;
+    }
+
+    .tab.active {
+      background: #007cba;
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
     }
   </style>
 </head>
+
 <body>
   <h2>Picksy</h2>
+
+  <!-- Currency Toggle -->
+  <div class="currency-toggle">
+    <button id="currencyINR" class="currency-btn active">₹ INR</button>
+    <button id="currencyUSD" class="currency-btn">$ USD</button>
+    <button id="currencyEUR" class="currency-btn">€ EUR</button>
+    <button id="currencyGBP" class="currency-btn">£ GBP</button>
+  </div>
+
   <button id="scanBtn">🔍 Scan This Page</button>
-  <div id="result"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="current">Current</button>
+    <button class="tab" data-tab="history">History</button>
+    <button class="tab" data-tab="comparison">Compare</button>
+  </div>
+
+  <!-- Current Product Tab -->
+  <div id="current" class="tab-content active">
+    <div id="result"></div>
+  </div>
+
+  <!-- History Tab -->
+  <div id="history" class="tab-content">
+    <div class="chart-container">
+      <div id="priceChart"></div>
+    </div>
+    <div id="historyDetails"></div>
+  </div>
+
+  <!-- Comparison Tab -->
+  <div id="comparison" class="tab-content">
+    <div id="comparisonResults"></div>
+  </div>
 
   <h3>Saved Items</h3>
   <div id="savedItems"></div>
 
   <script src="popup.js"></script>
 </body>
+
 </html>

@@ -14,7 +14,48 @@ function simpleTitle() {
         document.querySelector("._35KyD6")?.innerText?.trim() ||
         "";
     } else if (location.hostname.includes("myntra")) {
-      title = document.querySelector(".pdp-title")?.innerText?.trim() || "";
+      // Myntra has brand and product name in separate elements
+      // Try multiple selectors to find brand and product
+      const brandSelectors = [".pdp-title", ".pdp-brand", "h1.pdp-name", ".brand-name", "[data-testid='brand']", ".product-brand"];
+      const productSelectors = [".pdp-name", ".product-name", ".pdp-product-name", "h1.product-title", ".product-title", "[data-testid='name']", ".product-productName"];
+
+      let brand = "";
+      let product = "";
+
+      // Find brand
+      for (const selector of brandSelectors) {
+        const element = document.querySelector(selector);
+        if (element && element.innerText?.trim()) {
+          brand = element.innerText.trim();
+          break;
+        }
+      }
+
+      // Find product name
+      for (const selector of productSelectors) {
+        const element = document.querySelector(selector);
+        if (element && element.innerText?.trim()) {
+          product = element.innerText.trim();
+          break;
+        }
+      }
+
+      // If we couldn't find separate elements, try to get from page title or breadcrumbs
+      if (!brand && !product) {
+        const breadcrumb = document.querySelector(".breadcrumbs a:last-child, .breadcrumb-item:last-child");
+        if (breadcrumb) {
+          title = breadcrumb.innerText?.trim() || "";
+        }
+      } else {
+        // Combine brand and product name
+        if (brand && product && brand !== product) {
+          title = `${brand} ${product}`;
+        } else {
+          title = brand || product || "";
+        }
+      }
+
+      console.log("🔍 Myntra title extraction:", { brand, product, combined: title, selectors: { brandSelectors, productSelectors } });
     }
 
     const og = document.querySelector('meta[property="og:title"]')?.content;
@@ -66,22 +107,42 @@ function parsePriceToNumber(str, sourceCurrency = 'USD') {
   if (!str) return null;
   const s = String(str).toLowerCase();
 
+  console.log("🔍 Parsing price:", str, "→", s);
+
   // Indian specific formats (lakh/crore)
   if (sourceCurrency === 'INR') {
     const lakh = s.match(/([\d.]+)\s*(lakh|lac)\b/);
     if (lakh) {
       const v = parseFloat(lakh[1]);
+      console.log("📊 Found lakh format:", lakh[1], "→", v * 100000);
       return isNaN(v) ? null : Math.round(v * 100000);
     }
     const crore = s.match(/([\d.]+)\s*crore\b/);
     if (crore) {
       const v = parseFloat(crore[1]);
+      console.log("📊 Found crore format:", crore[1], "→", v * 10000000);
       return isNaN(v) ? null : Math.round(v * 10000000);
     }
   }
 
-  // plain numeric
-  const num = parseFloat(s.replace(/[^0-9.]/g, ""));
+  // plain numeric - properly handle commas and currency symbols
+  // First, extract the first valid price pattern
+  const pricePattern = /[₹$€£]?\s*[\d,]+(?:\.\d{1,2})?/;
+  const match = s.match(pricePattern);
+
+  if (match) {
+    let cleaned = match[0].replace(/[₹$€£,\s]/g, ""); // Remove currency symbols, commas, spaces
+    cleaned = cleaned.replace(/[^0-9.]/g, ""); // Remove any remaining non-numeric chars except dots
+    const num = parseFloat(cleaned);
+    console.log("💰 Cleaned price:", s, "→", match[0], "→", cleaned, "→", num);
+    return isNaN(num) ? null : Math.round(num);
+  }
+
+  // Fallback: clean the whole string
+  let cleaned = s.replace(/[₹$€£,\s]/g, "");
+  cleaned = cleaned.replace(/[^0-9.]/g, "");
+  const num = parseFloat(cleaned);
+  console.log("💰 Fallback cleaned price:", s, "→", cleaned, "→", num);
   return isNaN(num) ? null : Math.round(num);
 }
 
@@ -270,9 +331,14 @@ function extractPrice() {
         "#newBuyBoxPrice"
       ];
       for (const sel of order) {
-        const t = document.querySelector(sel)?.innerText?.trim();
+        const element = document.querySelector(sel);
+        const t = element?.innerText?.trim();
+        console.log(`🔍 Amazon selector ${sel}:`, t, element);
         const v = parsePriceToNumber(t, detectedCurrency);
-        if (v) return { display: formatPrice(v, detectedCurrency), value: v, via: `amazon:${sel}` };
+        if (v) {
+          console.log(`✅ Found price via ${sel}:`, t, "→", v, "→", formatPrice(v, detectedCurrency));
+          return { display: formatPrice(v, detectedCurrency), value: v, via: `amazon:${sel}` };
+        }
       }
     } else if (location.hostname.includes("flipkart")) {
       const order = ["div.Nx9bqj.CxhGGd", "._30jeq3", "._16Jk6d"];
@@ -464,6 +530,210 @@ function canonicalUrl() {
   }
 }
 
+// ---------------- CROSS-SITE COMPARISON ----------------
+function extractProductKeywords(title) {
+  if (!title) return [];
+
+  let cleanTitle = title.trim();
+  console.log("🔍 Original title:", title);
+
+  // Step 1: Clean the title and extract core information
+  let processedTitle = cleanTitle
+    .replace(/\([^)]*\)/g, ' ') // Remove parentheses content
+    .replace(/\[[^\]]*\]/g, ' ') // Remove bracket content
+    .replace(/[^\w\s]/g, ' ') // Replace special chars with spaces
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .trim();
+
+  console.log("🔍 Processed title:", processedTitle);
+
+  // Step 2: Extract brand names (comprehensive list)
+  const allBrands = [
+    // Tech brands
+    'apple', 'samsung', 'oneplus', 'xiaomi', 'oppo', 'vivo', 'realme', 'motorola', 'nokia', 'sony', 'lg', 'huawei', 'honor',
+    'asus', 'acer', 'hp', 'dell', 'lenovo', 'msi', 'gigabyte', 'evga', 'corsair', 'cooler master', 'thermaltake',
+    'nvidia', 'amd', 'intel', 'western digital', 'seagate', 'kingston', 'crucial', 'sandisk',
+    // Fashion brands
+    'hrx', 'roadster', 'here&now', 'mast&harbour', 'wrogn', 'nike', 'adidas', 'puma', 'reebok', 'under armour',
+    'levis', 'tommy hilfiger', 'calvin klein', 'polo ralph lauren', 'zara', 'h&m', 'maniac', 'bewakoof',
+    'the souled store', 'campus sutra', 'being human', 'flying machine', 'pepe jeans', 'spykar'
+  ];
+
+  // Step 3: Extract product categories and types
+  const productTypes = [
+    // Electronics
+    'iphone', 'galaxy', 'oneplus', 'pixel', 'macbook', 'thinkpad', 'inspiron', 'xps', 'pavilion', 'ideapad', 'vivobook', 'zenbook',
+    'graphics card', 'gpu', 'processor', 'cpu', 'motherboard', 'ram', 'memory', 'ssd', 'hard drive', 'monitor', 'keyboard', 'mouse',
+    'rtx', 'gtx', 'radeon', 'ryzen', 'core i3', 'core i5', 'core i7', 'core i9',
+    // Fashion
+    'shirt', 'tshirt', 't-shirt', 'jeans', 'dress', 'shoes', 'sneakers', 'jacket', 'hoodie', 'sweatshirt', 'kurta', 'saree', 'kurti'
+  ];
+
+  // Step 4: Extract specifications and key features
+  const lowerTitle = processedTitle.toLowerCase();
+  const keywords = [];
+
+  // Extract brand
+  let foundBrand = '';
+  for (const brand of allBrands) {
+    if (lowerTitle.includes(brand.toLowerCase())) {
+      foundBrand = brand;
+      keywords.push(brand);
+      break;
+    }
+  }
+
+  // Extract product type/model
+  let foundType = '';
+  for (const type of productTypes) {
+    if (lowerTitle.includes(type.toLowerCase())) {
+      foundType = type;
+      if (!keywords.includes(type)) {
+        keywords.push(type);
+      }
+      break;
+    }
+  }
+
+  // Extract model numbers and specifications
+  const specs = [];
+
+  // Model numbers (iPhone 15, Galaxy S24, RTX 4090, etc.)
+  const modelMatch = lowerTitle.match(/(\w+\s*\d+\s*\w*)/g);
+  if (modelMatch) {
+    modelMatch.forEach(model => {
+      const cleanModel = model.trim();
+      if (cleanModel.length > 2 && !keywords.includes(cleanModel)) {
+        specs.push(cleanModel);
+      }
+    });
+  }
+
+  // Storage capacity
+  const storageMatch = lowerTitle.match(/(\d+)\s*(gb|tb)(?!\s*(ram|memory|ddr))/gi);
+  if (storageMatch) {
+    storageMatch.forEach(storage => {
+      const cleanStorage = storage.replace(/\s+/g, '').toUpperCase();
+      if (!specs.includes(cleanStorage)) {
+        specs.push(cleanStorage);
+      }
+    });
+  }
+
+  // RAM
+  const ramMatch = lowerTitle.match(/(\d+)\s*gb\s*(ram|memory|ddr)/gi);
+  if (ramMatch) {
+    ramMatch.forEach(ram => {
+      const cleanRam = ram.replace(/\s+/g, ' ').trim();
+      if (!specs.includes(cleanRam)) {
+        specs.push(cleanRam);
+      }
+    });
+  }
+
+  // Add specifications to keywords
+  keywords.push(...specs.slice(0, 3));
+
+  // Step 5: Add important descriptive words
+  const stopWords = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'about', 'into', 'through', 'during', 'before', 'after', 'above', 'below', 'between', 'among', 'under', 'over', 'men', 'women', 'boys', 'girls', 'kids', 'unisex', 'home', 'office', 'gaming', 'mobile', 'phone', 'smartphone', 'laptop', 'computer', 'pc'];
+
+  const additionalWords = processedTitle
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(word => {
+      return word.length > 3 &&
+        !stopWords.includes(word) &&
+        !keywords.some(k => k.toLowerCase().includes(word)) &&
+        !word.match(/^\d+$/) && // Skip pure numbers
+        word.match(/^[a-z]+$/); // Only alphabetic words
+    })
+    .slice(0, 2);
+
+  keywords.push(...additionalWords);
+
+  // Step 6: Clean and limit final keywords
+  const finalKeywords = keywords
+    .filter(k => k && k.length > 1)
+    .slice(0, 5);
+
+  console.log("🔍 Smart extraction:", {
+    original: title,
+    foundBrand,
+    foundType,
+    specs,
+    additionalWords,
+    finalKeywords,
+    searchQuery: finalKeywords.join(' ')
+  });
+
+  return finalKeywords;
+}
+
+function generateSearchUrls(keywords, currentSite) {
+  if (!keywords.length) return [];
+
+  // Create a more targeted search query
+  // Use the first keyword (usually the product name) as primary, others as refinements
+  const primaryKeyword = keywords[0];
+  const searchQuery = keywords.join(' ');
+
+  const urls = [];
+
+  if (!currentSite.includes('amazon.in')) {
+    urls.push({
+      site: 'Amazon India',
+      url: `https://www.amazon.in/s?k=${encodeURIComponent(searchQuery)}&ref=nb_sb_noss`,
+      query: searchQuery
+    });
+  }
+
+  if (!currentSite.includes('flipkart')) {
+    urls.push({
+      site: 'Flipkart',
+      url: `https://www.flipkart.com/search?q=${encodeURIComponent(searchQuery)}&otracker=search&otracker1=search&marketplace=FLIPKART`,
+      query: searchQuery
+    });
+  }
+
+  if (!currentSite.includes('myntra')) {
+    // Myntra is mainly for fashion, so only include if it seems like a fashion item
+    const fashionKeywords = ['shirt', 'tshirt', 't-shirt', 'jeans', 'dress', 'shoes', 'watch', 'bag', 'jacket', 'hoodie', 'kurta', 'saree', 'kurti', 'hrx', 'roadster', 'sneakers', 'tracksuit', 'joggers'];
+    const isFashionItem = keywords.some(keyword =>
+      fashionKeywords.some(fashion => keyword.toLowerCase().includes(fashion))
+    );
+
+    if (isFashionItem) {
+      // Use full search query for better Myntra results
+      const myntraQuery = searchQuery.replace(/\s+/g, '-').toLowerCase();
+      urls.push({
+        site: 'Myntra',
+        url: `https://www.myntra.com/search?q=${encodeURIComponent(searchQuery)}`,
+        query: searchQuery
+      });
+    }
+  }
+
+  // Add more e-commerce sites for better comparison
+  if (!currentSite.includes('croma')) {
+    urls.push({
+      site: 'Croma',
+      url: `https://www.croma.com/search?q=${encodeURIComponent(searchQuery)}`,
+      query: searchQuery
+    });
+  }
+
+  if (!currentSite.includes('vijaysales')) {
+    urls.push({
+      site: 'Vijay Sales',
+      url: `https://www.vijaysales.com/search/${encodeURIComponent(searchQuery)}`,
+      query: searchQuery
+    });
+  }
+
+  console.log("🔍 Generated search URLs:", urls);
+  return urls;
+}
+
 // ---------------- MAIN SCRAPE ----------------
 async function scrapeProduct() {
   try {
@@ -479,17 +749,24 @@ async function scrapeProduct() {
 
     const p = extractPrice();
     const avail = detectAvailability();
+    const title = simpleTitle();
+
+    // Generate cross-site comparison data
+    const keywords = extractProductKeywords(title);
+    const comparisonUrls = generateSearchUrls(keywords, location.hostname);
 
     const data = {
       source: location.hostname,
       url: canonicalUrl(),
-      title: simpleTitle(),
+      title: title,
       price: p.display, // Already formatted with detected currency
       priceValue: p.value,
       currency: detectedCurrency, // Show what was detected
       userCurrency: finalCurrency, // Show user preference
       availability: avail.status,
       availabilityReason: avail.reason,
+      keywords: keywords, // For cross-site comparison
+      comparisonUrls: comparisonUrls, // URLs to check other sites
       scrapedAt: new Date().toISOString()
     };
 
@@ -507,6 +784,8 @@ async function scrapeProduct() {
       userCurrency: 'USD',
       availability: "Unknown",
       availabilityReason: "error",
+      keywords: [],
+      comparisonUrls: [],
       scrapedAt: new Date().toISOString()
     };
   }
@@ -514,16 +793,33 @@ async function scrapeProduct() {
 
 // ---------------- MESSAGING ----------------
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log("🔧 Content script received message:", msg);
+
   if (msg?.type === "PICKSY_SCRAPE") {
+    console.log("🔧 Starting product scrape...");
     scrapeProduct().then((payload) => {
+      console.log("🔧 Scrape completed, sending result:", payload);
       chrome.runtime.sendMessage({ type: "PICKSY_SCRAPE_RESULT", payload });
+    }).catch((error) => {
+      console.error("🔧 Scrape error:", error);
     });
+    sendResponse({ received: true });
+    return true;
   }
 
   if (msg?.type === "PICKSY_CURRENCY_CHANGED") {
-    // Re-scrape with new currency when currency is changed
+    console.log("🔧 Currency changed, re-scraping...");
     scrapeProduct().then((payload) => {
       chrome.runtime.sendMessage({ type: "PICKSY_SCRAPE_RESULT", payload });
+    }).catch((error) => {
+      console.error("🔧 Re-scrape error:", error);
     });
+    sendResponse({ received: true });
+    return true;
   }
+
+  sendResponse({ received: false });
 });
+
+// Add a simple test to verify content script is loaded
+console.log("🔧 Picksy content script loaded on:", location.hostname);
