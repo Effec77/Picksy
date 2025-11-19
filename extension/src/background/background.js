@@ -311,6 +311,42 @@ function saveToHistory(payload, fromAuto = false) {
         console.log(`💰 Price drop detected: ${payload.title.substring(0, 30)}... - ₹${lastEntry.price} → ₹${historyEntry.price}`);
       }
 
+      // Target price reached notification
+      chrome.storage.local.get(['priceTargets'], (targetResult) => {
+        const priceTargets = targetResult.priceTargets || {};
+        const targetPrice = priceTargets[productId];
+
+        if (
+          fromAuto &&
+          settings.priceAlerts &&
+          targetPrice &&
+          historyEntry.price !== null &&
+          historyEntry.price <= targetPrice &&
+          (!lastEntry || lastEntry.price > targetPrice)
+        ) {
+          chrome.notifications.create({
+            type: "basic",
+            iconUrl: chrome.runtime.getURL("assets/logo.png"),
+            title: "🎯 Target Price Reached!",
+            message: `${payload.title.substring(0, 50)}... is now ₹${historyEntry.price.toLocaleString()} (Target: ₹${targetPrice.toLocaleString()})`,
+            buttons: [
+              { title: "Buy Now" },
+              { title: "Dismiss" }
+            ],
+            requireInteraction: true
+          }, (notificationId) => {
+            if (chrome.runtime.lastError) {
+              console.error("Notification error:", chrome.runtime.lastError.message);
+            } else {
+              console.log("✅ Target price notification created:", notificationId);
+              chrome.storage.local.set({ [`notification_${notificationId}`]: payload.url });
+            }
+          });
+
+          console.log(`🎯 Target price reached: ${payload.title.substring(0, 30)}... - ₹${historyEntry.price} (Target: ₹${targetPrice})`);
+        }
+      });
+
       // Stock back notification
       if (
         fromAuto &&

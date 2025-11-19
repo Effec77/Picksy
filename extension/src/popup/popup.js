@@ -290,7 +290,7 @@ function deleteProduct(index) {
 
 // Load saved items when popup opens
 function loadSaved() {
-  chrome.storage.local.get({ saved: [] }, (data) => {
+  chrome.storage.local.get({ saved: [], priceTargets: {} }, (data) => {
     const savedDiv = document.getElementById("savedItems");
     savedDiv.innerHTML = "";
 
@@ -305,17 +305,80 @@ function loadSaved() {
 
       // Generate product ID for history lookup
       const productId = generateProductIdFromUrl(p.url, p.title);
+      const targetPrice = data.priceTargets[productId] || null;
+      const currentPrice = p.priceValue || 0;
 
       const div = document.createElement("div");
       div.className = "product";
+      
+      let targetSection = '';
+      if (targetPrice && currentPrice) {
+        const diff = currentPrice - targetPrice;
+        const percentAway = ((diff / currentPrice) * 100).toFixed(1);
+        const progress = Math.max(0, Math.min(100, 100 - percentAway));
+        
+        if (currentPrice <= targetPrice) {
+          targetSection = `
+            <div style="background: #d4edda; padding: 5px; border-radius: 3px; margin: 5px 0; font-size: 12px;">
+              🎯 <strong>Target reached!</strong> ₹${targetPrice.toLocaleString()}
+            </div>
+          `;
+        } else {
+          targetSection = `
+            <div style="margin: 5px 0; font-size: 12px;">
+              🎯 Target: ₹${targetPrice.toLocaleString()} 
+              <span style="color: #dc3545;">(₹${diff.toLocaleString()} away)</span>
+              <div style="background: #eee; height: 6px; border-radius: 3px; margin-top: 3px; overflow: hidden;">
+                <div style="background: #28a745; height: 100%; width: ${progress}%;"></div>
+              </div>
+            </div>
+          `;
+        }
+      }
+
       div.innerHTML = `
         <strong>${p.title}</strong><br/>
         💰 ${p.price} | 📦 <span class="stock-indicator ${stockClass}"></span>${p.availability}<br/>
+        ${targetSection}
+        <div style="margin: 5px 0;">
+          <input type="number" class="targetPriceInput" data-product-id="${productId}" 
+                 placeholder="Set target price" value="${targetPrice || ''}" 
+                 style="width: 120px; padding: 3px; border: 1px solid #ddd; border-radius: 3px; font-size: 12px;">
+          <button class="setTargetBtn" data-product-id="${productId}" 
+                  style="padding: 3px 8px; font-size: 12px; background: #ffc107; color: #000;">
+            ${targetPrice ? '✏️ Update' : '🎯 Set Target'}
+          </button>
+          ${targetPrice ? `<button class="clearTargetBtn" data-product-id="${productId}" 
+                  style="padding: 3px 8px; font-size: 12px; background: #6c757d;">❌</button>` : ''}
+        </div>
         <a href="${p.url}" target="_blank">Open</a><br/>
         <button class="viewHistoryBtn" data-product-id="${productId}">📊 View History</button>
         <button class="deleteBtn" data-index="${i}">❌ Delete</button>
       `;
       savedDiv.appendChild(div);
+    });
+
+    // Attach set target button events
+    document.querySelectorAll(".setTargetBtn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const productId = e.target.dataset.productId;
+        const input = document.querySelector(`.targetPriceInput[data-product-id="${productId}"]`);
+        const targetPrice = parseFloat(input.value);
+        
+        if (targetPrice && targetPrice > 0) {
+          setTargetPrice(productId, targetPrice);
+        } else {
+          alert('Please enter a valid target price');
+        }
+      });
+    });
+
+    // Attach clear target button events
+    document.querySelectorAll(".clearTargetBtn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const productId = e.target.dataset.productId;
+        clearTargetPrice(productId);
+      });
     });
 
     // Attach view history button events
@@ -770,5 +833,33 @@ function loadPriceHistory(productId) {
       document.querySelector('[data-tab="history"]').classList.add('active');
       document.getElementById('history').classList.add('active');
     }
+  });
+}
+
+
+// ------------- PRICE TARGET MANAGEMENT -------------
+function setTargetPrice(productId, targetPrice) {
+  chrome.storage.local.get(['priceTargets'], (result) => {
+    const priceTargets = result.priceTargets || {};
+    priceTargets[productId] = targetPrice;
+    
+    chrome.storage.local.set({ priceTargets }, () => {
+      console.log(`🎯 Target price set: ${productId} -> ₹${targetPrice}`);
+      showToast(`✅ Target price set to ₹${targetPrice.toLocaleString()}`);
+      loadSaved(); // Refresh the display
+    });
+  });
+}
+
+function clearTargetPrice(productId) {
+  chrome.storage.local.get(['priceTargets'], (result) => {
+    const priceTargets = result.priceTargets || {};
+    delete priceTargets[productId];
+    
+    chrome.storage.local.set({ priceTargets }, () => {
+      console.log(`🎯 Target price cleared: ${productId}`);
+      showToast('✅ Target price cleared');
+      loadSaved(); // Refresh the display
+    });
   });
 }
