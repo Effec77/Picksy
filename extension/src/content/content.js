@@ -822,4 +822,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 // Add a simple test to verify content script is loaded
-console.log("🔧 Picksy content script loaded on:", location.hostname);
+try {
+  console.log("🔧 Picksy content script loaded on:", location.hostname);
+  console.log("🔧 Content script ready to receive messages");
+} catch (error) {
+  console.error("🔧 Content script initialization error:", error);
+}

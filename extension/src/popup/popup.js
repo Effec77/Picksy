@@ -4,8 +4,10 @@ let currentProduct = null;
 document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   setupCurrencyToggle();
+  setupSettings();
   loadSaved();
   loadLastScrape();
+  updateScanInfo();
 });
 
 // Tab functionality
@@ -292,9 +294,17 @@ function loadSaved() {
     const savedDiv = document.getElementById("savedItems");
     savedDiv.innerHTML = "";
 
+    if (data.saved.length === 0) {
+      savedDiv.innerHTML = '<p style="text-align: center; color: #999;">No saved products yet</p>';
+      return;
+    }
+
     data.saved.forEach((p, i) => {
       const stockClass = p.availability === 'InStock' ? 'stock-in' :
         p.availability === 'OutOfStock' ? 'stock-out' : 'stock-unknown';
+
+      // Generate product ID for history lookup
+      const productId = generateProductIdFromUrl(p.url, p.title);
 
       const div = document.createElement("div");
       div.className = "product";
@@ -302,9 +312,18 @@ function loadSaved() {
         <strong>${p.title}</strong><br/>
         💰 ${p.price} | 📦 <span class="stock-indicator ${stockClass}"></span>${p.availability}<br/>
         <a href="${p.url}" target="_blank">Open</a><br/>
+        <button class="viewHistoryBtn" data-product-id="${productId}">📊 View History</button>
         <button class="deleteBtn" data-index="${i}">❌ Delete</button>
       `;
       savedDiv.appendChild(div);
+    });
+
+    // Attach view history button events
+    document.querySelectorAll(".viewHistoryBtn").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const productId = e.target.dataset.productId;
+        loadPriceHistory(productId);
+      });
     });
 
     // Attach delete button events
@@ -314,5 +333,442 @@ function loadSaved() {
         deleteProduct(index);
       });
     });
+  });
+}
+
+// Helper function to generate product ID from URL and title
+function generateProductIdFromUrl(url, title) {
+  if (url.includes("amazon")) {
+    const match = url.match(/\/dp\/([A-Z0-9]{10})/);
+    if (match) return `amazon_${match[1]}`;
+  }
+  if (url.includes("flipkart")) {
+    const match = url.match(/\/p\/([a-zA-Z0-9]+)/);
+    if (match) return `flipkart_${match[1]}`;
+  }
+
+  const domain = new URL(url).hostname.replace("www.", "");
+  const titleHash = title.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 20);
+  return `${domain}_${titleHash}`;
+}
+
+// ==================== SETTINGS FUNCTIONALITY ====================
+
+function setupSettings() {
+  // Load current settings
+  chrome.storage.local.get(['picksySettings'], (result) => {
+    const settings = result.picksySettings || {
+      autoScanEnabled: true,
+      priceAlerts: true,
+      stockAlerts: true
+    };
+
+    // Set checkbox states
+    document.getElementById('autoScanToggle').checked = settings.autoScanEnabled !== false;
+    document.getElementById('priceAlertsToggle').checked = settings.priceAlerts !== false;
+    document.getElementById('stockAlertsToggle').checked = settings.stockAlerts !== false;
+  });
+
+  // Auto-scan toggle
+  document.getElementById('autoScanToggle').addEventListener('change', (e) => {
+    chrome.storage.local.get(['picksySettings'], (result) => {
+      const settings = result.picksySettings || {};
+      settings.autoScanEnabled = e.target.checked;
+      chrome.storage.local.set({ picksySettings: settings }, () => {
+        console.log('Auto-scan:', e.target.checked ? 'enabled' : 'disabled');
+        showToast(e.target.checked ? '✅ Auto-scan enabled' : '⏸️ Auto-scan paused');
+      });
+    });
+  });
+
+  // Price alerts toggle
+  document.getElementById('priceAlertsToggle').addEventListener('change', (e) => {
+    chrome.storage.local.get(['picksySettings'], (result) => {
+      const settings = result.picksySettings || {};
+      settings.priceAlerts = e.target.checked;
+      chrome.storage.local.set({ picksySettings: settings }, () => {
+        console.log('Price alerts:', e.target.checked ? 'enabled' : 'disabled');
+        showToast(e.target.checked ? '🔔 Price alerts enabled' : '🔕 Price alerts disabled');
+      });
+    });
+  });
+
+  // Stock alerts toggle
+  document.getElementById('stockAlertsToggle').addEventListener('change', (e) => {
+    chrome.storage.local.get(['picksySettings'], (result) => {
+      const settings = result.picksySettings || {};
+      settings.stockAlerts = e.target.checked;
+      chrome.storage.local.set({ picksySettings: settings }, () => {
+        console.log('Stock alerts:', e.target.checked ? 'enabled' : 'disabled');
+        showToast(e.target.checked ? '📦 Stock alerts enabled' : '📭 Stock alerts disabled');
+      });
+    });
+  });
+
+  // Test background scan button
+  document.getElementById('testBackgroundBtn').addEventListener('click', testBackgroundScan);
+}
+
+// Manual trigger for background scan (for testing)
+function testBackgroundScan() {
+  const btn = document.getElementById('testBackgroundBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Scanning...';
+
+  chrome.runtime.sendMessage({ type: "PICKSY_MANUAL_BACKGROUND_SCAN" }, (response) => {
+    btn.disabled = false;
+    btn.textContent = '🧪 Test Background Scan Now';
+
+    if (response && response.ok) {
+      console.log(`🧪 Background scan started for ${response.count} products`);
+      showToast(`✅ Scanning ${response.count} products...`);
+      
+      // Update last scan time
+      setTimeout(() => {
+        updateScanInfo();
+      }, 2000);
+    } else {
+      console.log("🧪 No saved products to scan");
+      showToast('⚠️ No saved products to scan');
+    }
+  });
+}
+
+// Update scan information
+function updateScanInfo() {
+  // Update saved products count
+  chrome.storage.local.get(['saved'], (result) => {
+    const savedCount = (result.saved || []).length;
+    const countElement = document.getElementById('savedCount');
+    if (countElement) {
+      countElement.textContent = savedCount;
+    }
+  });
+
+  // Get last scan time from storage
+  chrome.storage.local.get(['lastBackgroundScan'], (result) => {
+    const lastScanElement = document.getElementById('lastScanTime');
+    if (lastScanElement) {
+      if (result.lastBackgroundScan) {
+        const lastScan = new Date(result.lastBackgroundScan);
+        lastScanElement.textContent = formatTimeAgo(lastScan);
+      } else {
+        lastScanElement.textContent = 'Never';
+      }
+    }
+  });
+
+  // Calculate next scan time (6 hours from last scan)
+  chrome.alarms.get('picksyAutoCheck', (alarm) => {
+    const nextScanElement = document.getElementById('nextScanTime');
+    if (nextScanElement && alarm) {
+      const nextScan = new Date(alarm.scheduledTime);
+      const now = new Date();
+      const diff = nextScan - now;
+      
+      if (diff > 0) {
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        nextScanElement.textContent = `${hours}h ${minutes}m`;
+      } else {
+        nextScanElement.textContent = 'Soon';
+      }
+    }
+  });
+}
+
+// Format time ago helper
+function formatTimeAgo(date) {
+  const now = new Date();
+  const diff = now - date;
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+// Toast notification helper
+function showToast(message) {
+  // Create toast element
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 14px;
+    z-index: 10000;
+    animation: slideUp 0.3s ease;
+  `;
+
+  document.body.appendChild(toast);
+
+  // Remove after 3 seconds
+  setTimeout(() => {
+    toast.style.animation = 'slideDown 0.3s ease';
+    setTimeout(() => {
+      document.body.removeChild(toast);
+    }, 300);
+  }, 3000);
+}
+
+// ------------- TEST NOTIFICATION FUNCTIONS -------------
+// Run these in the console to test notifications:
+// testPriceDropNotification()
+// testStockNotification()
+// testRealPriceDrop() - Uses your actual saved products
+
+window.testPriceDropNotification = function() {
+  console.log("🧪 Testing price drop notification...");
+  
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("assets/logo.png"),
+    title: "🎉 Picksy Price Drop Alert!",
+    message: "Test iPhone 15 Pro dropped by ₹10,000 (8.2%)",
+    buttons: [
+      { title: "View Product" },
+      { title: "Dismiss" }
+    ],
+    requireInteraction: true
+  }, (notificationId) => {
+    if (chrome.runtime.lastError) {
+      console.error("❌ Notification error:", chrome.runtime.lastError.message);
+    } else {
+      console.log("✅ Notification created successfully:", notificationId);
+    }
+  });
+};
+
+window.testStockNotification = function() {
+  console.log("🧪 Testing stock notification...");
+  
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("assets/logo.png"),
+    title: "📦 Product Back in Stock!",
+    message: "Test iPhone 15 Pro is now available",
+    buttons: [
+      { title: "View Product" },
+      { title: "Dismiss" }
+    ],
+    requireInteraction: true
+  }, (notificationId) => {
+    if (chrome.runtime.lastError) {
+      console.error("❌ Notification error:", chrome.runtime.lastError.message);
+    } else {
+      console.log("✅ Notification created successfully:", notificationId);
+    }
+  });
+};
+
+window.testRealPriceDrop = function() {
+  console.log("🧪 Testing with real product data...");
+  
+  chrome.storage.local.get(null, (items) => {
+    const historyKeys = Object.keys(items).filter(k => k.startsWith('history_'));
+    
+    if (historyKeys.length === 0) {
+      console.error("❌ No products with history found. Save a product first!");
+      return;
+    }
+    
+    const firstProduct = items[historyKeys[0]];
+    console.log("Testing with:", firstProduct.title);
+    
+    // Get the last price
+    const lastPrice = firstProduct.history[firstProduct.history.length - 1].price;
+    console.log("Last price:", lastPrice);
+    
+    // Create a lower price to trigger notification
+    const lowerPrice = Math.round(lastPrice * 0.9); // 10% discount
+    console.log("New lower price:", lowerPrice);
+    
+    // Send message to background script to trigger the notification
+    chrome.runtime.sendMessage({
+      type: "PICKSY_TEST_NOTIFICATION",
+      payload: {
+        title: firstProduct.title,
+        priceValue: lowerPrice,
+        url: firstProduct.url,
+        currency: "INR",
+        availability: "InStock",
+        source: firstProduct.source
+      }
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error("❌ Error:", chrome.runtime.lastError.message);
+      } else {
+        console.log("✅ Test notification triggered!");
+      }
+    });
+  });
+};
+
+
+// ------------- PRICE HISTORY CHART -------------
+function drawPriceChart(historyData) {
+  const chartContainer = document.getElementById('priceChart');
+  const detailsContainer = document.getElementById('historyDetails');
+  
+  if (!historyData || !historyData.history || historyData.history.length === 0) {
+    chartContainer.innerHTML = '<p style="text-align: center; color: #999;">No price history available yet</p>';
+    detailsContainer.innerHTML = '';
+    return;
+  }
+
+  const history = historyData.history;
+  const width = 380;
+  const height = 180;
+  const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // Get price range
+  const prices = history.map(h => h.price).filter(p => p !== null);
+  if (prices.length === 0) {
+    chartContainer.innerHTML = '<p style="text-align: center; color: #999;">No valid price data</p>';
+    return;
+  }
+
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const priceRange = maxPrice - minPrice || 1;
+
+  // Create SVG
+  let svg = `<svg width="${width}" height="${height}" style="background: #fff; border: 1px solid #ddd; border-radius: 5px;">`;
+
+  // Draw grid lines
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (chartHeight / 4) * i;
+    const price = maxPrice - (priceRange / 4) * i;
+    svg += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#eee" stroke-width="1"/>`;
+    svg += `<text x="${padding.left - 5}" y="${y + 4}" text-anchor="end" font-size="10" fill="#666">₹${Math.round(price).toLocaleString()}</text>`;
+  }
+
+  // Draw line chart
+  let pathData = '';
+  const points = [];
+  
+  history.forEach((entry, index) => {
+    if (entry.price === null) return;
+    
+    const x = padding.left + (chartWidth / (history.length - 1 || 1)) * index;
+    const y = padding.top + chartHeight - ((entry.price - minPrice) / priceRange) * chartHeight;
+    
+    points.push({ x, y, entry, index });
+    
+    if (pathData === '') {
+      pathData = `M ${x} ${y}`;
+    } else {
+      pathData += ` L ${x} ${y}`;
+    }
+  });
+
+  // Draw the line
+  if (pathData) {
+    svg += `<path d="${pathData}" fill="none" stroke="#007cba" stroke-width="2"/>`;
+  }
+
+  // Draw points
+  points.forEach((point, idx) => {
+    const isLowest = point.entry.price === minPrice;
+    const isHighest = point.entry.price === maxPrice;
+    const color = isLowest ? '#28a745' : isHighest ? '#dc3545' : '#007cba';
+    const radius = (isLowest || isHighest) ? 5 : 3;
+    
+    svg += `<circle cx="${point.x}" cy="${point.y}" r="${radius}" fill="${color}" stroke="white" stroke-width="1"/>`;
+    
+    // Add tooltip on hover (using title element)
+    const date = new Date(point.entry.timestamp).toLocaleDateString();
+    svg += `<circle cx="${point.x}" cy="${point.y}" r="8" fill="transparent" style="cursor: pointer;">
+      <title>₹${point.entry.price.toLocaleString()} on ${date}</title>
+    </circle>`;
+  });
+
+  // X-axis labels (dates)
+  const labelInterval = Math.ceil(history.length / 5);
+  history.forEach((entry, index) => {
+    if (index % labelInterval === 0 || index === history.length - 1) {
+      const x = padding.left + (chartWidth / (history.length - 1 || 1)) * index;
+      const date = new Date(entry.timestamp);
+      const label = `${date.getMonth() + 1}/${date.getDate()}`;
+      svg += `<text x="${x}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#666">${label}</text>`;
+    }
+  });
+
+  svg += '</svg>';
+  chartContainer.innerHTML = svg;
+
+  // Show price statistics
+  const currentPrice = history[history.length - 1].price;
+  const firstPrice = history[0].price;
+  const priceDiff = currentPrice - firstPrice;
+  const percentChange = ((priceDiff / firstPrice) * 100).toFixed(1);
+  const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+
+  const trendIcon = priceDiff < 0 ? '📉' : priceDiff > 0 ? '📈' : '➡️';
+  const trendColor = priceDiff < 0 ? '#28a745' : priceDiff > 0 ? '#dc3545' : '#666';
+
+  detailsContainer.innerHTML = `
+    <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; margin-top: 10px;">
+      <h4 style="margin: 0 0 10px 0;">${historyData.title}</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+        <div>
+          <strong>Current:</strong> ₹${currentPrice.toLocaleString()}
+        </div>
+        <div>
+          <strong>Average:</strong> ₹${avgPrice.toLocaleString()}
+        </div>
+        <div>
+          <strong>Lowest:</strong> <span style="color: #28a745;">₹${minPrice.toLocaleString()}</span>
+        </div>
+        <div>
+          <strong>Highest:</strong> <span style="color: #dc3545;">₹${maxPrice.toLocaleString()}</span>
+        </div>
+        <div style="grid-column: 1 / -1;">
+          <strong>Trend:</strong> 
+          <span style="color: ${trendColor};">
+            ${trendIcon} ${priceDiff > 0 ? '+' : ''}₹${Math.abs(priceDiff).toLocaleString()} 
+            (${percentChange > 0 ? '+' : ''}${percentChange}%)
+          </span>
+        </div>
+        <div style="grid-column: 1 / -1; font-size: 11px; color: #666;">
+          Tracking since ${new Date(history[0].timestamp).toLocaleDateString()} 
+          (${history.length} data points)
+        </div>
+      </div>
+      <button id="viewProductBtn" style="width: 100%; margin-top: 10px;">🔗 View Product</button>
+    </div>
+  `;
+
+  // Add click handler for view product button
+  document.getElementById('viewProductBtn')?.addEventListener('click', () => {
+    chrome.tabs.create({ url: historyData.url });
+  });
+}
+
+// Load and display price history for a product
+function loadPriceHistory(productId) {
+  chrome.storage.local.get([`history_${productId}`], (result) => {
+    const historyData = result[`history_${productId}`];
+    if (historyData) {
+      drawPriceChart(historyData);
+      
+      // Switch to history tab
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.querySelector('[data-tab="history"]').classList.add('active');
+      document.getElementById('history').classList.add('active');
+    }
   });
 }

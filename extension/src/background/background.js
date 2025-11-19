@@ -27,11 +27,33 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const tab = tabs[0];
       console.log("🔧 Active tab:", tab);
       if (tab?.id) {
+        // Try to send message to content script
         chrome.tabs.sendMessage(tab.id, { type: "PICKSY_SCRAPE" }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.error("🔧 Error sending to content script:", chrome.runtime.lastError);
-          } else {
-            console.log("🔧 Message sent to content script successfully");
+          // Suppress the "receiving end does not exist" error - it's harmless
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            // Only log if it's not the common "receiving end" error
+            if (!lastError.message.includes("Receiving end does not exist")) {
+              console.error("🔧 Error details:", lastError.message);
+            }
+            
+            // Silently inject content script if needed
+            chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ['src/content/content.js']
+            }).then(() => {
+              // Retry sending message after injection
+              setTimeout(() => {
+                chrome.tabs.sendMessage(tab.id, { type: "PICKSY_SCRAPE" }, (retryResponse) => {
+                  // Suppress error on retry too
+                  if (chrome.runtime.lastError) {
+                    // Silently ignore - content script will be ready on next scan
+                  }
+                });
+              }, 1000);
+            }).catch(() => {
+              // Silently ignore injection errors - content script may already be loaded
+            });
           }
         });
       }
@@ -66,6 +88,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       payload,
     });
   }
+
+  // Manual background scan trigger (for testing)
+  if (msg?.type === "PICKSY_MANUAL_BACKGROUND_SCAN") {
+    chrome.storage.local.get(["saved"], (res) => {
+      const savedProducts = res.saved || [];
+      if (savedProducts.length > 0) {
+        console.log("🧪 Manual background scan triggered");
+        scrapeProductsInSequence(savedProducts);
+        sendResponse({ ok: true, count: savedProducts.length });
+      } else {
+        sendResponse({ ok: false, error: "No saved products" });
+      }
+    });
+    return true;
+  }
+
+  // Test notification trigger (for testing)
+  if (msg?.type === "PICKSY_TEST_NOTIFICATION") {
+    console.log("🧪 Test notification triggered");
+    saveToHistory(msg.payload, true);
+    sendResponse({ ok: true });
+    return true;
+  }
 });
 
 // ----------------- ALARM HANDLER -----------------
@@ -82,84 +127,92 @@ chrome.alarms.onAlarm.addListener((alarm) => {
         return;
       }
 
+      if (savedProducts.length === 0) {
+        console.log("⏰ No saved products to check");
+        return;
+      }
+
       console.log(`⏰ Auto-checking ${savedProducts.length} saved products`);
 
-      savedProducts.forEach((product, index) => {
-        // Stagger requests to avoid overwhelming servers
-        setTimeout(() => {
-          scrapeProductInBackground(product.url, product.title);
-        }, index * 2000); // 2 second delay between each request
-      });
+      // Use new tab-based scraper
+      scrapeProductsInSequence(savedProducts);
     });
   }
 });
 
-// ----------------- BACKGROUND SCRAPER -----------------
-function scrapeProductInBackground(url, originalTitle) {
-  console.log("📡 Auto-scraping:", url);
+// ----------------- TAB-BASED BACKGROUND SCRAPER -----------------
+function scrapeProductsInSequence(products) {
+  if (!products || products.length === 0) {
+    console.log("⏰ No products to scrape");
+    return;
+  }
 
-  fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+  // Record scan start time
+  chrome.storage.local.set({ lastBackgroundScan: Date.now() });
+
+  let currentIndex = 0;
+  const scrapedProducts = [];
+
+  function scrapeNext() {
+    if (currentIndex >= products.length) {
+      console.log(`✅ Background scraping complete. Updated ${scrapedProducts.length} products`);
+      // Update last scan time again on completion
+      chrome.storage.local.set({ lastBackgroundScan: Date.now() });
+      return;
     }
-  })
-    .then((res) => res.text())
-    .then((html) => {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, "text/html");
 
-      let title = originalTitle;
-      let priceValue = null;
-      let availability = "Unknown";
+    const product = products[currentIndex];
+    console.log(`📡 [${currentIndex + 1}/${products.length}] Scraping: ${product.title.substring(0, 50)}...`);
 
-      // Amazon selectors
-      if (url.includes("amazon")) {
-        const titleEl = doc.querySelector("#productTitle");
-        const priceEl = doc.querySelector("#corePrice_feature_div .a-price .a-offscreen, .a-price .a-offscreen, #priceblock_ourprice");
-        const availEl = doc.querySelector("#availability");
-
-        if (titleEl) title = titleEl.innerText.trim();
-        if (priceEl) {
-          const priceText = priceEl.innerText.replace(/[₹,\s]/g, "");
-          priceValue = parseFloat(priceText) || null;
-        }
-        if (availEl) {
-          const availText = availEl.innerText.toLowerCase();
-          availability = availText.includes("in stock") ? "InStock" : "OutOfStock";
-        }
+    // Create invisible tab
+    chrome.tabs.create({
+      url: product.url,
+      active: false
+    }, (tab) => {
+      if (chrome.runtime.lastError) {
+        console.error(`❌ Failed to create tab: ${chrome.runtime.lastError.message}`);
+        currentIndex++;
+        setTimeout(scrapeNext, 2000);
+        return;
       }
 
-      // Flipkart selectors
-      else if (url.includes("flipkart")) {
-        const titleEl = doc.querySelector(".B_NuCI, ._35KyD6");
-        const priceEl = doc.querySelector("._30jeq3, ._16Jk6d, .Nx9bqj.CxhGGd");
+      const tabId = tab.id;
+      let scraped = false;
 
-        if (titleEl) title = titleEl.innerText.trim();
-        if (priceEl) {
-          const priceText = priceEl.innerText.replace(/[₹,\s]/g, "");
-          priceValue = parseFloat(priceText) || null;
+      // Wait for page to load and content script to inject
+      setTimeout(() => {
+        chrome.tabs.sendMessage(tabId, { type: "PICKSY_SCRAPE" }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(`❌ Content script error: ${chrome.runtime.lastError.message}`);
+          } else {
+            scraped = true;
+            scrapedProducts.push(product.title);
+          }
+
+          // Close tab
+          chrome.tabs.remove(tabId, () => {
+            console.log(`🗑️ Closed tab for: ${product.title.substring(0, 30)}...`);
+          });
+
+          // Move to next product
+          currentIndex++;
+          setTimeout(scrapeNext, 3000); // 3 second delay between products
+        });
+      }, 6000); // Wait 6 seconds for page load
+
+      // Failsafe: close tab if scraping hangs
+      setTimeout(() => {
+        if (!scraped) {
+          console.warn(`⚠️ Scraping timeout for: ${product.title.substring(0, 30)}...`);
+          chrome.tabs.remove(tabId);
+          currentIndex++;
+          setTimeout(scrapeNext, 2000);
         }
-        availability = "InStock"; // Assume in stock if page loads
-      }
-
-      const payload = {
-        title: title,
-        priceValue: priceValue,
-        url: url,
-        currency: "INR",
-        availability: availability,
-        source: new URL(url).hostname,
-        scrapedAt: new Date().toISOString()
-      };
-
-      console.log("📡 Auto-scraped payload:", payload);
-
-      // Send into same pipeline with auto flag
-      saveToHistory(payload, true);
-    })
-    .catch((err) => {
-      console.error("📡 Auto scrape failed for", url, ":", err);
+      }, 15000); // 15 second timeout
     });
+  }
+
+  scrapeNext();
 }
 
 // ----------------- ENHANCED HISTORY HANDLING -----------------
@@ -179,6 +232,11 @@ function generateProductId(url, title) {
 }
 
 function saveToHistory(payload, fromAuto = false) {
+  if (!payload || !payload.url || !payload.title) {
+    console.warn("⚠️ Invalid payload, skipping history save");
+    return;
+  }
+
   const productId = generateProductId(payload.url, payload.title);
   const timestamp = Date.now();
 
@@ -186,7 +244,7 @@ function saveToHistory(payload, fromAuto = false) {
     price: payload.priceValue,
     stock: payload.availability === "InStock",
     timestamp: timestamp,
-    currency: payload.currency,
+    currency: payload.currency || "INR",
   };
 
   chrome.storage.local.get([`history_${productId}`, "picksySettings"], (result) => {
@@ -201,12 +259,12 @@ function saveToHistory(payload, fromAuto = false) {
     const lastEntry = existingProduct.history[existingProduct.history.length - 1];
     const settings = result.picksySettings || {};
 
-    // Only add if price/stock actually changed
-    if (
-      !lastEntry ||
+    // Only add if price/stock actually changed OR this is first entry
+    const hasChanged = !lastEntry ||
       lastEntry.price !== historyEntry.price ||
-      lastEntry.stock !== historyEntry.stock
-    ) {
+      lastEntry.stock !== historyEntry.stock;
+
+    if (hasChanged) {
       existingProduct.history.push(historyEntry);
 
       // Keep only last 50 entries
@@ -214,9 +272,11 @@ function saveToHistory(payload, fromAuto = false) {
         existingProduct.history = existingProduct.history.slice(-50);
       }
 
-      chrome.storage.local.set({ [`history_${productId}`]: existingProduct });
+      chrome.storage.local.set({ [`history_${productId}`]: existingProduct }, () => {
+        console.log(`💾 History updated for: ${payload.title.substring(0, 30)}... (${existingProduct.history.length} entries)`);
+      });
 
-      // Price drop notification (only for auto scans)
+      // Price drop notification (only for background auto-scans)
       if (
         fromAuto &&
         settings.priceAlerts &&
@@ -230,29 +290,126 @@ function saveToHistory(payload, fromAuto = false) {
 
         chrome.notifications.create({
           type: "basic",
-          iconUrl: "assets/logo.png",
+          iconUrl: chrome.runtime.getURL("assets/logo.png"),
           title: "🎉 Picksy Price Drop Alert!",
           message: `${payload.title.substring(0, 50)}... dropped by ₹${priceDrop.toLocaleString()} (${percentDrop}%)`,
           buttons: [
             { title: "View Product" },
             { title: "Dismiss" }
-          ]
+          ],
+          requireInteraction: true
+        }, (notificationId) => {
+          if (chrome.runtime.lastError) {
+            console.error("Notification error:", chrome.runtime.lastError.message);
+          } else {
+            console.log("✅ Notification created:", notificationId);
+            // Store product URL with notification for click handling
+            chrome.storage.local.set({ [`notification_${notificationId}`]: payload.url });
+          }
         });
 
-        console.log(`💰 Price drop detected: ${payload.title} - ₹${lastEntry.price} → ₹${historyEntry.price}`);
+        console.log(`💰 Price drop detected: ${payload.title.substring(0, 30)}... - ₹${lastEntry.price} → ₹${historyEntry.price}`);
+      }
+
+      // Stock back notification
+      if (
+        fromAuto &&
+        settings.priceAlerts &&
+        lastEntry &&
+        !lastEntry.stock &&
+        historyEntry.stock
+      ) {
+        chrome.notifications.create({
+          type: "basic",
+          iconUrl: chrome.runtime.getURL("assets/logo.png"),
+          title: "📦 Product Back in Stock!",
+          message: `${payload.title.substring(0, 60)}... is now available`,
+          buttons: [
+            { title: "View Product" },
+            { title: "Dismiss" }
+          ],
+          requireInteraction: true
+        }, (notificationId) => {
+          if (chrome.runtime.lastError) {
+            console.error("Notification error:", chrome.runtime.lastError.message);
+          } else {
+            console.log("✅ Notification created:", notificationId);
+            chrome.storage.local.set({ [`notification_${notificationId}`]: payload.url });
+          }
+        });
+
+        console.log(`📦 Stock restored: ${payload.title.substring(0, 30)}...`);
       }
     } else {
-      console.log("📊 No price/stock change detected, skipping history update");
+      console.log(`📊 No change for: ${payload.title.substring(0, 30)}...`);
     }
   });
 }
 
-// Handle notification clicks
+// ----------------- NOTIFICATION HANDLERS -----------------
 chrome.notifications.onButtonClicked.addListener((notificationId, buttonIndex) => {
-  if (buttonIndex === 0) { // "View Product" button
-    // Could open the product URL, but we'd need to store it with the notification
-    chrome.notifications.clear(notificationId);
-  } else if (buttonIndex === 1) { // "Dismiss" button
-    chrome.notifications.clear(notificationId);
+  if (buttonIndex === 0) {
+    // "View Product" button clicked
+    chrome.storage.local.get([`notification_${notificationId}`], (result) => {
+      const productUrl = result[`notification_${notificationId}`];
+      if (productUrl) {
+        chrome.tabs.create({ url: productUrl });
+        // Clean up stored URL
+        chrome.storage.local.remove([`notification_${notificationId}`]);
+      }
+    });
   }
+
+  // Clear notification for both buttons
+  chrome.notifications.clear(notificationId);
 });
+
+// Handle notification click (clicking notification body)
+chrome.notifications.onClicked.addListener((notificationId) => {
+  chrome.storage.local.get([`notification_${notificationId}`], (result) => {
+    const productUrl = result[`notification_${notificationId}`];
+    if (productUrl) {
+      chrome.tabs.create({ url: productUrl });
+      chrome.storage.local.remove([`notification_${notificationId}`]);
+    }
+  });
+  chrome.notifications.clear(notificationId);
+});
+
+// ------------- TEST NOTIFICATION FUNCTION (for background console) -------------
+// Open background service worker console and run: testNotificationFromBackground()
+globalThis.testNotificationFromBackground = function() {
+  console.log("🧪 Testing notification from background...");
+  
+  chrome.storage.local.get(null, (items) => {
+    const historyKeys = Object.keys(items).filter(k => k.startsWith('history_'));
+    
+    if (historyKeys.length === 0) {
+      console.error("❌ No products with history found. Save a product first!");
+      return;
+    }
+    
+    const firstProduct = items[historyKeys[0]];
+    console.log("Testing with:", firstProduct.title);
+    
+    // Get the last price
+    const lastPrice = firstProduct.history[firstProduct.history.length - 1].price;
+    console.log("Last price:", lastPrice);
+    
+    // Create a lower price to trigger notification
+    const lowerPrice = Math.round(lastPrice * 0.9); // 10% discount
+    console.log("New lower price:", lowerPrice);
+    
+    // Trigger notification
+    saveToHistory({
+      title: firstProduct.title,
+      priceValue: lowerPrice,
+      url: firstProduct.url,
+      currency: "INR",
+      availability: "InStock",
+      source: firstProduct.source
+    }, true);
+    
+    console.log("✅ Notification should appear now!");
+  });
+};
