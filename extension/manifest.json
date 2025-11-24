@@ -8,15 +8,14 @@
       "default_popup": "src/popup/popup.html"
     },
     "background": {
-      "service_worker": "src/background/background.js",
-      "type": "module"
+      "service_worker": "src/background/background.js"
     },
     "icons": {
       "16": "assets/logo.png",
       "48": "assets/logo.png",
       "128": "assets/logo.png"
     },
-    "permissions": ["storage", "activeTab", "scripting", "tabs"],
+    "permissions": ["storage", "activeTab", "scripting", "tabs", "alarms", "notifications"],
     "host_permissions": ["<all_urls>"],
     "content_scripts": [
       {
