@@ -1,5 +1,20 @@
 // ----------------- ENHANCED PICKSY BACKGROUND SCRIPT -----------------
 
+// ----------------- SERVICE WORKER KEEPALIVE -----------------
+// Keep service worker alive
+let keepAliveInterval;
+
+function startKeepAlive() {
+  if (keepAliveInterval) return;
+  keepAliveInterval = setInterval(() => {
+    chrome.runtime.getPlatformInfo(() => {
+      // Just a ping to keep service worker alive
+    });
+  }, 20000); // Every 20 seconds
+}
+
+startKeepAlive();
+
 // ----------------- INSTALL DEFAULTS -----------------
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({
@@ -109,6 +124,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     console.log("🧪 Test notification triggered");
     saveToHistory(msg.payload, true);
     sendResponse({ ok: true });
+    return true;
+  }
+
+  // Health check (for popup to verify service worker is responsive)
+  if (msg?.type === "PICKSY_HEALTH_CHECK") {
+    console.log("💚 Health check received");
+    sendResponse({ ok: true, status: "healthy" });
     return true;
   }
 });

@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSaved();
   loadLastScrape();
   updateScanInfo();
+  checkServiceWorkerHealth(); // Check if background script is responsive
 });
 
 // Tab functionality
@@ -58,10 +59,26 @@ function setupCurrencyToggle() {
 
 // Ask the content script to scrape
 document.getElementById("scanBtn").addEventListener("click", () => {
+  const scanBtn = document.getElementById("scanBtn");
+  const resultDiv = document.getElementById("result");
+  
+  // Show loading state
+  scanBtn.disabled = true;
+  scanBtn.innerHTML = '⏳ Scanning...';
+  resultDiv.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="loading-spinner"></div><p>Analyzing product...</p></div>';
+  
   chrome.runtime.sendMessage({ type: "PICKSY_SCRAPE_REQUEST" }, (response) => {
+    // Reset button after 3 seconds (in case no response comes back)
+    setTimeout(() => {
+      scanBtn.disabled = false;
+      scanBtn.innerHTML = '🔍 Scan Current Page';
+    }, 3000);
+    
     if (chrome.runtime.lastError) {
       console.error("Error sending scrape request:", chrome.runtime.lastError);
-      document.getElementById("result").innerHTML = '<p style="color: red;">Error: Could not connect to background script. Try reloading the extension.</p>';
+      scanBtn.disabled = false;
+      scanBtn.innerHTML = '🔍 Scan Current Page';
+      showServiceWorkerError(resultDiv);
     }
   });
 });
@@ -69,8 +86,19 @@ document.getElementById("scanBtn").addEventListener("click", () => {
 // Listen for scrape results
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "PICKSY_SCRAPE_RESULT_BROADCAST") {
+    // Reset scan button
+    const scanBtn = document.getElementById("scanBtn");
+    scanBtn.disabled = false;
+    scanBtn.innerHTML = '🔍 Scan Current Page';
+    
     currentProduct = msg.payload;
-    showResult(msg.payload);
+    
+    // Check if scraping failed or no product detected
+    if (!msg.payload || !msg.payload.title) {
+      showNoProductDetected();
+    } else {
+      showResult(msg.payload);
+    }
   }
 });
 
@@ -90,15 +118,67 @@ function showResult(product) {
   const stockClass = product.availability === 'InStock' ? 'stock-in' :
     product.availability === 'OutOfStock' ? 'stock-out' : 'stock-unknown';
 
+  // Build trust signals display
+  let trustSignalsHTML = '';
+  if (product.rating || product.reviewCount || product.seller || (product.badges && product.badges.length)) {
+    trustSignalsHTML = '<div style="background: #f0f8ff; padding: 8px; border-radius: 5px; margin: 8px 0; border-left: 3px solid #007cba;">';
+    trustSignalsHTML += '<strong style="color: #007cba;">Trust Signals:</strong><br/>';
+    
+    if (product.rating) {
+      const stars = '⭐'.repeat(Math.round(product.rating));
+      trustSignalsHTML += `<span style="font-size: 14px;">${stars} ${product.rating}/5</span>`;
+      if (product.reviewCount) {
+        trustSignalsHTML += ` <span style="color: #666; font-size: 12px;">(${product.reviewCount.toLocaleString()} reviews)</span>`;
+      }
+      trustSignalsHTML += '<br/>';
+    }
+    
+    if (product.seller) {
+      trustSignalsHTML += `👤 Seller: <strong>${product.seller}</strong><br/>`;
+    }
+    
+    if (product.badges && product.badges.length) {
+      trustSignalsHTML += `🏆 ${product.badges.join(', ')}<br/>`;
+    }
+    
+    trustSignalsHTML += '</div>';
+  }
+
   resultDiv.innerHTML = `
-    <div class="product">
-      <strong>${product.title}</strong><br/>
-      💰 Price: ${product.price}<br/>
-      📦 Status: <span class="stock-indicator ${stockClass}"></span>${product.availability}<br/>
-      🌐 Source: ${product.source}<br/>
-      🔗 <a href="${product.url}" target="_blank">Open Link</a><br/>
-      <button id="saveBtn">💾 Save Item</button>
-      <button id="viewHistoryBtn">📊 View History</button>
+    <div class="product" style="background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);">
+      <h3 style="margin: 0 0 12px 0; color: #333; font-size: 15px; line-height: 1.4;">${product.title}</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+        <div style="background: white; padding: 8px; border-radius: 5px; border-left: 3px solid #28a745;">
+          <strong style="font-size: 11px; color: #666;">PRICE</strong><br/>
+          <span style="font-size: 18px; font-weight: bold; color: #28a745;">💰 ${product.price}</span>
+        </div>
+        <div style="background: white; padding: 8px; border-radius: 5px; border-left: 3px solid ${stockClass === 'stock-in' ? '#28a745' : '#dc3545'};">
+          <strong style="font-size: 11px; color: #666;">STATUS</strong><br/>
+          <span style="font-size: 14px; font-weight: bold;">
+            <span class="stock-indicator ${stockClass}"></span>${product.availability}
+          </span>
+        </div>
+      </div>
+      <div style="background: white; padding: 8px; border-radius: 5px; margin-bottom: 12px; border-left: 3px solid #007cba;">
+        <strong style="font-size: 11px; color: #666;">SOURCE</strong><br/>
+        <span style="font-size: 13px; color: #333;">🌐 ${product.source}</span>
+      </div>
+      ${trustSignalsHTML}
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <button id="saveBtn" style="flex: 1; background: #28a745;">💾 Save</button>
+        <button id="viewHistoryBtn" style="flex: 1; background: #007cba;">📊 History</button>
+        <a href="${product.url}" target="_blank" class="open-product-link" style="
+          flex: 1;
+          background: #6c5ce7;
+          color: white;
+          padding: 5px 10px;
+          border-radius: 3px;
+          text-decoration: none;
+          text-align: center;
+          font-size: 14px;
+          transition: all 0.2s ease;
+        ">🔗 Open</a>
+      </div>
     </div>
   `;
 
@@ -112,30 +192,60 @@ function showResult(product) {
 }
 
 // Load price history and create chart
-function loadPriceHistory(product) {
-  const productId = generateProductId(product.url, product.title);
+function loadPriceHistory(productOrId) {
+  // Handle both product object and productId string
+  let productId;
+  if (typeof productOrId === 'string') {
+    productId = productOrId;
+  } else if (productOrId && productOrId.url && productOrId.title) {
+    productId = generateProductId(productOrId.url, productOrId.title);
+  } else {
+    console.error('Invalid product or productId provided');
+    return;
+  }
 
   chrome.storage.local.get([`history_${productId}`], (result) => {
     const historyData = result[`history_${productId}`];
     
     const historyDetailsElement = document.getElementById('historyDetails');
-    if (!historyDetailsElement) {
-      console.error('historyDetails element not found');
+    const priceChartElement = document.getElementById('priceChart');
+    
+    if (!historyDetailsElement || !priceChartElement) {
+      console.error('History elements not found');
       return;
     }
 
-    if (!historyData || !historyData.history.length) {
-      historyDetailsElement.innerHTML = '<p>No price history available yet. Scan this product a few times to build history!</p>';
-      // Also clear the chart area
-      const priceChartElement = document.getElementById('priceChart');
-      if (priceChartElement) {
-        priceChartElement.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No data to display</p>';
-      }
+    if (!historyData || !historyData.history || historyData.history.length === 0) {
+      priceChartElement.innerHTML = `
+        <div style="
+          text-align: center;
+          padding: 40px 20px;
+          background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+          border-radius: 10px;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        ">
+          <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
+          <h3 style="margin: 0 0 8px 0; color: #333;">No Price History Yet</h3>
+          <p style="margin: 0; font-size: 13px; color: #666;">
+            Scan this product a few times to build price history!
+          </p>
+        </div>
+      `;
+      historyDetailsElement.innerHTML = '';
       return;
     }
 
     createPriceChart(historyData.history);
     displayHistoryDetails(historyData.history);
+    
+    // Switch to history tab
+    document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.querySelector('[data-tab="history"]').classList.add('active');
+    document.getElementById('history').classList.add('active');
   });
 }
 
@@ -147,10 +257,44 @@ function createPriceChart(history) {
     return;
   }
   
+  // Clear existing content first
+  priceChartElement.innerHTML = '';
+  
+  console.log('📊 Creating chart with', history.length, 'data points');
+  
   if (!history.length) {
     priceChartElement.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No price history available</p>';
     return;
   }
+  
+  // If only 1 data point, show a message
+  if (history.length === 1) {
+    const entry = history[0];
+    const date = new Date(entry.timestamp).toLocaleDateString();
+    console.log('📍 Single data point detected, showing message');
+    priceChartElement.innerHTML = `
+      <div style="
+        text-align: center;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        border-radius: 10px;
+        height: 180px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      ">
+        <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
+        <h3 style="margin: 0 0 8px 0; color: #333;">First Data Point Recorded</h3>
+        <p style="margin: 0; font-size: 13px; color: #666;">
+          Price: ₹${entry.price.toLocaleString()} on ${date}<br/>
+          Scan this product again to see price trends!
+        </p>
+      </div>
+    `;
+    return;
+  }
+  
+  console.log('📈 Drawing full chart with lines');
   
   const prices = history.map(h => h.price);
   const minPrice = Math.min(...prices);
@@ -159,14 +303,30 @@ function createPriceChart(history) {
   
   let chartHTML = '<div style="position: relative; height: 180px; border: 1px solid #ddd; border-radius: 5px; padding: 20px 60px 20px 20px; background: #f9f9f9;">';
   
-  // Add price points and lines
+  // Create single SVG for all lines
+  chartHTML += '<svg style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">';
+  
+  // Add connecting lines
+  history.forEach((entry, index) => {
+    if (index > 0) {
+      const x = (index / Math.max(history.length - 1, 1)) * 100;
+      const y = 100 - ((entry.price - minPrice) / priceRange) * 80;
+      const prevX = ((index - 1) / Math.max(history.length - 1, 1)) * 100;
+      const prevY = 100 - ((history[index - 1].price - minPrice) / priceRange) * 80;
+      
+      chartHTML += `<line x1="${prevX}%" y1="${prevY}%" x2="${x}%" y2="${y}%" stroke="#007cba" stroke-width="2"/>`;
+    }
+  });
+  
+  chartHTML += '</svg>';
+  
+  // Add price points
   history.forEach((entry, index) => {
     const x = (index / Math.max(history.length - 1, 1)) * 100;
     const y = 100 - ((entry.price - minPrice) / priceRange) * 80;
     const stockColor = entry.stock ? '#28a745' : '#dc3545';
     const date = new Date(entry.timestamp).toLocaleDateString();
     
-    // Add point
     chartHTML += `
       <div style="
         position: absolute;
@@ -183,18 +343,6 @@ function createPriceChart(history) {
         z-index: 2;
       " title="${date}: ₹${entry.price.toLocaleString()} - ${entry.stock ? 'In Stock' : 'Out of Stock'}"></div>
     `;
-    
-    // Connect points with lines
-    if (index > 0) {
-      const prevX = ((index - 1) / Math.max(history.length - 1, 1)) * 100;
-      const prevY = 100 - ((history[index - 1].price - minPrice) / priceRange) * 80;
-      
-      chartHTML += `
-        <svg style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
-          <line x1="${prevX}%" y1="${prevY}%" x2="${x}%" y2="${y}%" stroke="#007cba" stroke-width="2"/>
-        </svg>
-      `;
-    }
   });
   
   // Add Y-axis labels
@@ -215,15 +363,35 @@ function displayHistoryDetails(history) {
   const oldest = history[0];
   const priceChange = latest.price - oldest.price;
   const changePercent = ((priceChange / oldest.price) * 100).toFixed(1);
+  const trendColor = priceChange < 0 ? '#28a745' : priceChange > 0 ? '#dc3545' : '#6c757d';
+  const trendIcon = priceChange < 0 ? '📉' : priceChange > 0 ? '📈' : '➡️';
 
   detailsDiv.innerHTML = `
-    <div class="product">
-      <h4>Price Trends</h4>
-      <p><strong>Current:</strong> ₹${latest.price.toLocaleString()}</p>
-      <p><strong>Change:</strong> ${priceChange >= 0 ? '📈' : '📉'} ₹${Math.abs(priceChange).toLocaleString()} (${changePercent}%)</p>
-      <p><strong>Lowest:</strong> ₹${Math.min(...history.map(h => h.price)).toLocaleString()}</p>
-      <p><strong>Highest:</strong> ₹${Math.max(...history.map(h => h.price)).toLocaleString()}</p>
-      <p><strong>Tracked since:</strong> ${new Date(oldest.timestamp).toLocaleDateString()}</p>
+    <div class="product" style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
+      <h4 style="margin: 0 0 12px 0; color: #333;">📊 Price Trends</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+        <div style="background: white; padding: 8px; border-radius: 5px;">
+          <strong style="color: #666; font-size: 11px;">CURRENT</strong><br/>
+          <span style="font-size: 16px; font-weight: bold; color: #007cba;">₹${latest.price.toLocaleString()}</span>
+        </div>
+        <div style="background: white; padding: 8px; border-radius: 5px;">
+          <strong style="color: #666; font-size: 11px;">CHANGE</strong><br/>
+          <span style="font-size: 16px; font-weight: bold; color: ${trendColor};">
+            ${trendIcon} ${changePercent}%
+          </span>
+        </div>
+        <div style="background: white; padding: 8px; border-radius: 5px;">
+          <strong style="color: #666; font-size: 11px;">LOWEST</strong><br/>
+          <span style="font-size: 16px; font-weight: bold; color: #28a745;">₹${Math.min(...history.map(h => h.price)).toLocaleString()}</span>
+        </div>
+        <div style="background: white; padding: 8px; border-radius: 5px;">
+          <strong style="color: #666; font-size: 11px;">HIGHEST</strong><br/>
+          <span style="font-size: 16px; font-weight: bold; color: #dc3545;">₹${Math.max(...history.map(h => h.price)).toLocaleString()}</span>
+        </div>
+      </div>
+      <p style="margin: 12px 0 0 0; font-size: 12px; color: #666; text-align: center;">
+        📅 Tracked since ${new Date(oldest.timestamp).toLocaleDateString()} (${history.length} data points)
+      </p>
     </div>
   `;
 }
@@ -232,24 +400,257 @@ function displayHistoryDetails(history) {
 function loadComparison(product) {
   const comparisonDiv = document.getElementById('comparisonResults');
 
+  // If no comparison URLs, generate them from the title
   if (!product.comparisonUrls || !product.comparisonUrls.length) {
-    comparisonDiv.innerHTML = '<p>No comparison sites available for this product.</p>';
-    return;
+    if (product.title) {
+      // Generate comparison URLs from title
+      const searchQuery = encodeURIComponent(product.title);
+      const currentSite = product.source || '';
+      
+      const urls = [];
+      
+      if (!currentSite.includes('amazon')) {
+        urls.push({
+          site: 'Amazon India',
+          icon: '📦',
+          url: `https://www.amazon.in/s?k=${searchQuery}`,
+          query: product.title
+        });
+      }
+      
+      if (!currentSite.includes('flipkart')) {
+        urls.push({
+          site: 'Flipkart',
+          icon: '🛒',
+          url: `https://www.flipkart.com/search?q=${searchQuery}`,
+          query: product.title
+        });
+      }
+      
+      if (!currentSite.includes('myntra')) {
+        urls.push({
+          site: 'Myntra',
+          icon: '👕',
+          url: `https://www.myntra.com/search?q=${searchQuery}`,
+          query: product.title
+        });
+      }
+      
+      product.comparisonUrls = urls;
+      product.keywords = product.title.split(' ').slice(0, 4);
+    } else {
+      comparisonDiv.innerHTML = `
+        <div style="text-align: center; padding: 30px 20px; background: #f8f9fa; border-radius: 10px;">
+          <div style="font-size: 48px; margin-bottom: 10px;">🔍</div>
+          <h3 style="margin: 0 0 8px 0;">No Product to Compare</h3>
+          <p style="margin: 0; font-size: 13px; color: #666;">
+            Scan a product first to see comparison options
+          </p>
+        </div>
+      `;
+      return;
+    }
   }
 
+  // Generate smart recommendation
+  const recommendation = generateRecommendation(product);
+
   comparisonDiv.innerHTML = `
+    ${recommendation}
     <div class="comparison-section">
-      <h4>🔍 Find this product on other sites:</h4>
-      <p><strong>Search keywords:</strong> ${product.keywords ? product.keywords.join(', ') : 'N/A'}</p>
-      ${product.comparisonUrls.map(site => `
-        <div class="comparison-item">
-          <span>${site.site}</span>
-          <a href="${site.url}" target="_blank">Search →</a>
+      <h4 style="margin: 0 0 12px 0; color: #333;">🔍 Compare Prices Across Sites</h4>
+      <div style="background: white; padding: 8px; border-radius: 5px; margin-bottom: 12px; border-left: 3px solid #007cba;">
+        <strong style="font-size: 12px; color: #007cba;">SEARCH KEYWORDS</strong><br/>
+        <span style="font-size: 13px; color: #333;">${product.keywords ? product.keywords.join(' • ') : 'N/A'}</span>
+      </div>
+      ${product.comparisonUrls.map((site, index) => `
+        <div class="comparison-item-card" style="
+          background: white;
+          padding: 12px;
+          border-radius: 8px;
+          margin-bottom: 8px;
+          border: 1px solid #e0e0e0;
+          transition: box-shadow 0.2s ease;
+        ">
+          <span style="font-size: 14px; font-weight: 500;">
+            ${site.icon || '🛍️'} ${site.site}
+          </span>
+          <a href="${site.url}" target="_blank" class="comparison-link" style="
+            background: #007cba;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s ease;
+          ">
+            Search →
+          </a>
         </div>
       `).join('')}
-      <p><small>💡 Tip: Open these links to manually compare prices. Automatic price fetching coming soon!</small></p>
+      <div style="background: #fff3cd; padding: 10px; border-radius: 5px; margin-top: 12px; border-left: 3px solid #ffc107;">
+        <span style="font-size: 12px; color: #856404;">
+          💡 <strong>Tip:</strong> Open these links in new tabs to manually compare prices and find the best deal!
+        </span>
+      </div>
     </div>
   `;
+}
+
+// Generate smart buying recommendation
+function generateRecommendation(product) {
+  let recommendation = '<div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px; border-radius: 8px; margin-bottom: 15px;">';
+  recommendation += '<h4 style="margin: 0 0 8px 0; color: white;">🎯 Smart Recommendation</h4>';
+
+  const signals = [];
+  let score = 0;
+  let maxScore = 0;
+
+  // Check if this is an official brand website first (highest priority)
+  const isOfficialSite = product.badges && product.badges.includes('Official Brand Website');
+  
+  if (isOfficialSite) {
+    // Official websites get maximum trust automatically
+    maxScore += 40;
+    score += 40;
+    signals.push(`🏢 Official Brand Website - Maximum authenticity guaranteed!`);
+    
+    // Stock signal for official sites
+    maxScore += 15;
+    if (product.availability === 'InStock') {
+      signals.push('✅ In stock');
+      score += 15;
+    } else if (product.availability === 'OutOfStock') {
+      signals.push('❌ Out of stock');
+      score += 0;
+    }
+    
+    // Seller signal
+    if (product.seller) {
+      maxScore += 20;
+      signals.push(`✅ Direct from: ${product.seller}`);
+      score += 20;
+    }
+    
+    // Reviews if available (bonus, not required)
+    if (product.rating) {
+      maxScore += 15;
+      const stars = '⭐'.repeat(Math.round(product.rating));
+      signals.push(`${stars} ${product.rating}/5 rating`);
+      score += 15;
+    }
+    
+    if (product.reviewCount) {
+      maxScore += 10;
+      signals.push(`📊 ${product.reviewCount.toLocaleString()} reviews`);
+      score += 10;
+    }
+  } else {
+    // For marketplace sites, use detailed scoring
+    
+    // Rating signal
+    if (product.rating) {
+      maxScore += 25;
+      if (product.rating >= 4.5) {
+        signals.push('⭐ Excellent ratings');
+        score += 25;
+      } else if (product.rating >= 4.0) {
+        signals.push('⭐ Good ratings');
+        score += 20;
+      } else if (product.rating >= 3.5) {
+        signals.push('⚠️ Average ratings');
+        score += 10;
+      } else {
+        signals.push('❌ Low ratings - be cautious');
+        score += 0;
+      }
+    }
+
+    // Review count signal
+    if (product.reviewCount) {
+      maxScore += 20;
+      if (product.reviewCount >= 1000) {
+        signals.push(`✅ ${product.reviewCount.toLocaleString()}+ reviews (highly trusted)`);
+        score += 20;
+      } else if (product.reviewCount >= 100) {
+        signals.push(`✅ ${product.reviewCount} reviews (trusted)`);
+        score += 15;
+      } else {
+        signals.push(`⚠️ Only ${product.reviewCount} reviews`);
+        score += 5;
+      }
+    }
+
+    // Stock signal
+    maxScore += 15;
+    if (product.availability === 'InStock') {
+      signals.push('✅ In stock');
+      score += 15;
+    } else if (product.availability === 'OutOfStock') {
+      signals.push('❌ Out of stock');
+      score += 0;
+    }
+
+    // Badges signal
+    if (product.badges && product.badges.length) {
+      maxScore += 20;
+      signals.push(`🏆 ${product.badges.join(', ')}`);
+      score += 20;
+    }
+
+    // Seller signal
+    if (product.seller) {
+      maxScore += 20;
+      const trustedSellers = ['Amazon', 'Flipkart', 'Myntra', 'Cloudtail', 'Appario'];
+      if (trustedSellers.some(s => product.seller.includes(s))) {
+        signals.push(`✅ Trusted seller: ${product.seller}`);
+        score += 20;
+      } else {
+        signals.push(`👤 Seller: ${product.seller}`);
+        score += 10;
+      }
+    }
+  }
+
+  // Calculate confidence
+  const confidence = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+
+  // Generate verdict
+  let verdict = '';
+  let verdictColor = '';
+  if (confidence >= 80) {
+    verdict = '🎉 Highly Recommended - Great deal with strong trust signals!';
+    verdictColor = '#4caf50';
+  } else if (confidence >= 60) {
+    verdict = '👍 Recommended - Good product with decent trust signals';
+    verdictColor = '#8bc34a';
+  } else if (confidence >= 40) {
+    verdict = '⚠️ Consider Carefully - Mixed signals, do more research';
+    verdictColor = '#ff9800';
+  } else {
+    verdict = '❌ Not Recommended - Weak trust signals, proceed with caution';
+    verdictColor = '#f44336';
+  }
+
+  recommendation += `<div style="background: rgba(255,255,255,0.2); padding: 8px; border-radius: 5px; margin-bottom: 8px;">`;
+  recommendation += `<strong style="font-size: 14px;">${verdict}</strong><br/>`;
+  recommendation += `<div style="background: rgba(0,0,0,0.2); height: 8px; border-radius: 4px; margin-top: 5px; overflow: hidden;">`;
+  recommendation += `<div style="background: ${verdictColor}; height: 100%; width: ${confidence}%; transition: width 0.3s;"></div>`;
+  recommendation += `</div>`;
+  recommendation += `<small>Confidence: ${confidence}%</small>`;
+  recommendation += `</div>`;
+
+  if (signals.length) {
+    recommendation += '<div style="font-size: 12px; line-height: 1.6;">';
+    signals.forEach(signal => {
+      recommendation += `• ${signal}<br/>`;
+    });
+    recommendation += '</div>';
+  }
+
+  recommendation += '</div>';
+  return recommendation;
 }
 
 // Helper function to generate product ID (same as background.js)
@@ -292,10 +693,32 @@ function deleteProduct(index) {
 function loadSaved() {
   chrome.storage.local.get({ saved: [], priceTargets: {} }, (data) => {
     const savedDiv = document.getElementById("savedItems");
+    const countBadge = document.getElementById("savedItemsCount");
     savedDiv.innerHTML = "";
 
+    // Update count badge
+    if (countBadge) {
+      countBadge.textContent = data.saved.length;
+      countBadge.style.animation = 'pulse 0.3s ease';
+    }
+
     if (data.saved.length === 0) {
-      savedDiv.innerHTML = '<p style="text-align: center; color: #999;">No saved products yet</p>';
+      savedDiv.innerHTML = `
+        <div style="
+          text-align: center;
+          padding: 30px 20px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 10px;
+          color: white;
+          margin-top: 10px;
+        ">
+          <div style="font-size: 48px; margin-bottom: 10px;">📦</div>
+          <h3 style="margin: 0 0 8px 0; color: white;">No Saved Products Yet</h3>
+          <p style="margin: 0; font-size: 13px; opacity: 0.9;">
+            Scan and save products to track their prices automatically!
+          </p>
+        </div>
+      `;
       return;
     }
 
@@ -678,165 +1101,6 @@ window.testRealPriceDrop = function() {
 };
 
 
-// ------------- PRICE HISTORY CHART -------------
-function drawPriceChart(historyData) {
-  const chartContainer = document.getElementById('priceChart');
-  const detailsContainer = document.getElementById('historyDetails');
-  
-  if (!historyData || !historyData.history || historyData.history.length === 0) {
-    chartContainer.innerHTML = '<p style="text-align: center; color: #999;">No price history available yet</p>';
-    detailsContainer.innerHTML = '';
-    return;
-  }
-
-  const history = historyData.history;
-  const width = 380;
-  const height = 180;
-  const padding = { top: 20, right: 20, bottom: 30, left: 50 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-
-  // Get price range
-  const prices = history.map(h => h.price).filter(p => p !== null);
-  if (prices.length === 0) {
-    chartContainer.innerHTML = '<p style="text-align: center; color: #999;">No valid price data</p>';
-    return;
-  }
-
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-  const priceRange = maxPrice - minPrice || 1;
-
-  // Create SVG
-  let svg = `<svg width="${width}" height="${height}" style="background: #fff; border: 1px solid #ddd; border-radius: 5px;">`;
-
-  // Draw grid lines
-  for (let i = 0; i <= 4; i++) {
-    const y = padding.top + (chartHeight / 4) * i;
-    const price = maxPrice - (priceRange / 4) * i;
-    svg += `<line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" stroke="#eee" stroke-width="1"/>`;
-    svg += `<text x="${padding.left - 5}" y="${y + 4}" text-anchor="end" font-size="10" fill="#666">₹${Math.round(price).toLocaleString()}</text>`;
-  }
-
-  // Draw line chart
-  let pathData = '';
-  const points = [];
-  
-  history.forEach((entry, index) => {
-    if (entry.price === null) return;
-    
-    const x = padding.left + (chartWidth / (history.length - 1 || 1)) * index;
-    const y = padding.top + chartHeight - ((entry.price - minPrice) / priceRange) * chartHeight;
-    
-    points.push({ x, y, entry, index });
-    
-    if (pathData === '') {
-      pathData = `M ${x} ${y}`;
-    } else {
-      pathData += ` L ${x} ${y}`;
-    }
-  });
-
-  // Draw the line
-  if (pathData) {
-    svg += `<path d="${pathData}" fill="none" stroke="#007cba" stroke-width="2"/>`;
-  }
-
-  // Draw points
-  points.forEach((point, idx) => {
-    const isLowest = point.entry.price === minPrice;
-    const isHighest = point.entry.price === maxPrice;
-    const color = isLowest ? '#28a745' : isHighest ? '#dc3545' : '#007cba';
-    const radius = (isLowest || isHighest) ? 5 : 3;
-    
-    svg += `<circle cx="${point.x}" cy="${point.y}" r="${radius}" fill="${color}" stroke="white" stroke-width="1"/>`;
-    
-    // Add tooltip on hover (using title element)
-    const date = new Date(point.entry.timestamp).toLocaleDateString();
-    svg += `<circle cx="${point.x}" cy="${point.y}" r="8" fill="transparent" style="cursor: pointer;">
-      <title>₹${point.entry.price.toLocaleString()} on ${date}</title>
-    </circle>`;
-  });
-
-  // X-axis labels (dates)
-  const labelInterval = Math.ceil(history.length / 5);
-  history.forEach((entry, index) => {
-    if (index % labelInterval === 0 || index === history.length - 1) {
-      const x = padding.left + (chartWidth / (history.length - 1 || 1)) * index;
-      const date = new Date(entry.timestamp);
-      const label = `${date.getMonth() + 1}/${date.getDate()}`;
-      svg += `<text x="${x}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#666">${label}</text>`;
-    }
-  });
-
-  svg += '</svg>';
-  chartContainer.innerHTML = svg;
-
-  // Show price statistics
-  const currentPrice = history[history.length - 1].price;
-  const firstPrice = history[0].price;
-  const priceDiff = currentPrice - firstPrice;
-  const percentChange = ((priceDiff / firstPrice) * 100).toFixed(1);
-  const avgPrice = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
-
-  const trendIcon = priceDiff < 0 ? '📉' : priceDiff > 0 ? '📈' : '➡️';
-  const trendColor = priceDiff < 0 ? '#28a745' : priceDiff > 0 ? '#dc3545' : '#666';
-
-  detailsContainer.innerHTML = `
-    <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; margin-top: 10px;">
-      <h4 style="margin: 0 0 10px 0;">${historyData.title}</h4>
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
-        <div>
-          <strong>Current:</strong> ₹${currentPrice.toLocaleString()}
-        </div>
-        <div>
-          <strong>Average:</strong> ₹${avgPrice.toLocaleString()}
-        </div>
-        <div>
-          <strong>Lowest:</strong> <span style="color: #28a745;">₹${minPrice.toLocaleString()}</span>
-        </div>
-        <div>
-          <strong>Highest:</strong> <span style="color: #dc3545;">₹${maxPrice.toLocaleString()}</span>
-        </div>
-        <div style="grid-column: 1 / -1;">
-          <strong>Trend:</strong> 
-          <span style="color: ${trendColor};">
-            ${trendIcon} ${priceDiff > 0 ? '+' : ''}₹${Math.abs(priceDiff).toLocaleString()} 
-            (${percentChange > 0 ? '+' : ''}${percentChange}%)
-          </span>
-        </div>
-        <div style="grid-column: 1 / -1; font-size: 11px; color: #666;">
-          Tracking since ${new Date(history[0].timestamp).toLocaleDateString()} 
-          (${history.length} data points)
-        </div>
-      </div>
-      <button id="viewProductBtn" style="width: 100%; margin-top: 10px;">🔗 View Product</button>
-    </div>
-  `;
-
-  // Add click handler for view product button
-  document.getElementById('viewProductBtn')?.addEventListener('click', () => {
-    chrome.tabs.create({ url: historyData.url });
-  });
-}
-
-// Load and display price history for a product
-function loadPriceHistory(productId) {
-  chrome.storage.local.get([`history_${productId}`], (result) => {
-    const historyData = result[`history_${productId}`];
-    if (historyData) {
-      drawPriceChart(historyData);
-      
-      // Switch to history tab
-      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-      document.querySelector('[data-tab="history"]').classList.add('active');
-      document.getElementById('history').classList.add('active');
-    }
-  });
-}
-
-
 // ------------- PRICE TARGET MANAGEMENT -------------
 function setTargetPrice(productId, targetPrice) {
   chrome.storage.local.get(['priceTargets'], (result) => {
@@ -862,4 +1126,179 @@ function clearTargetPrice(productId) {
       loadSaved(); // Refresh the display
     });
   });
+}
+
+
+// ==================== ERROR HANDLING & USER FEEDBACK ====================
+
+// Check if service worker is responsive
+function checkServiceWorkerHealth() {
+  chrome.runtime.sendMessage({ type: "PICKSY_HEALTH_CHECK" }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.warn("⚠️ Service worker not responsive:", chrome.runtime.lastError.message);
+      showServiceWorkerWarning();
+    } else {
+      console.log("✅ Service worker is healthy");
+    }
+  });
+}
+
+// Show service worker warning banner
+function showServiceWorkerWarning() {
+  const warningBanner = document.createElement('div');
+  warningBanner.id = 'serviceWorkerWarning';
+  warningBanner.style.cssText = `
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    padding: 12px;
+    text-align: center;
+    font-size: 13px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  `;
+  warningBanner.innerHTML = `
+    <strong>⚠️ Extension Service Inactive</strong><br/>
+    <small>Background features may not work properly</small><br/>
+    <button id="reloadExtensionBtn" style="
+      margin-top: 8px;
+      padding: 6px 12px;
+      background: white;
+      color: #ff6b6b;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 12px;
+    ">🔄 Reload Extension</button>
+  `;
+  
+  // Insert at the top of the popup
+  const container = document.querySelector('.container');
+  container.insertBefore(warningBanner, container.firstChild);
+  
+  // Add reload button handler
+  document.getElementById('reloadExtensionBtn').addEventListener('click', () => {
+    chrome.runtime.reload();
+  });
+}
+
+// Show service worker error in result div
+function showServiceWorkerError(resultDiv) {
+  resultDiv.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    ">
+      <h3 style="margin: 0 0 10px 0; color: white;">⚠️ Connection Error</h3>
+      <p style="margin: 0 0 15px 0; font-size: 14px;">
+        Could not connect to the extension's background service.<br/>
+        This usually happens when the service worker becomes inactive.
+      </p>
+      <button id="reloadExtensionBtn2" style="
+        padding: 10px 20px;
+        background: white;
+        color: #ff6b6b;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 14px;
+      ">🔄 Reload Extension</button>
+      <p style="margin: 15px 0 0 0; font-size: 12px; opacity: 0.9;">
+        Or manually reload at: <code style="background: rgba(255,255,255,0.2); padding: 2px 6px; border-radius: 3px;">chrome://extensions</code>
+      </p>
+    </div>
+  `;
+  
+  document.getElementById('reloadExtensionBtn2')?.addEventListener('click', () => {
+    chrome.runtime.reload();
+  });
+}
+
+// Show "no product detected" message with helpful tips
+function showNoProductDetected() {
+  const resultDiv = document.getElementById("result");
+  resultDiv.innerHTML = `
+    <div style="
+      background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+    ">
+      <h3 style="margin: 0 0 10px 0;">🔍 No Product Detected</h3>
+      <p style="margin: 0 0 15px 0; font-size: 14px;">
+        We couldn't find a product on this page.
+      </p>
+      <div style="
+        background: rgba(255,255,255,0.5);
+        padding: 12px;
+        border-radius: 5px;
+        text-align: left;
+        font-size: 13px;
+      ">
+        <strong>💡 Tips:</strong><br/>
+        • Make sure you're on a product page (not search results)<br/>
+        • Supported sites: Amazon, Flipkart, Myntra, Nike, Adidas, Puma<br/>
+        • Try refreshing the page and scanning again<br/>
+        • Some sites may not be fully supported yet
+      </div>
+      <button id="tryScanAgain" style="
+        margin-top: 15px;
+        padding: 10px 20px;
+        background: #6c5ce7;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+      ">🔄 Try Again</button>
+    </div>
+  `;
+  
+  document.getElementById('tryScanAgain')?.addEventListener('click', () => {
+    document.getElementById('scanBtn').click();
+  });
+}
+
+// Enhanced toast with different types
+function showToast(message, type = 'info') {
+  const colors = {
+    success: '#28a745',
+    error: '#dc3545',
+    warning: '#ffc107',
+    info: '#333'
+  };
+  
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: ${colors[type] || colors.info};
+    color: ${type === 'warning' ? '#000' : 'white'};
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    animation: slideUp 0.3s ease;
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.animation = 'slideDown 0.3s ease';
+    setTimeout(() => {
+      if (document.body.contains(toast)) {
+        document.body.removeChild(toast);
+      }
+    }, 300);
+  }, 3000);
 }

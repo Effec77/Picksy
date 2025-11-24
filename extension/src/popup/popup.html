@@ -253,11 +253,183 @@
         opacity: 0;
       }
     }
+
+    /* Loading Spinner */
+    .loading-spinner {
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #007cba;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Disabled button state */
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Smooth Animations */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes slideInLeft {
+      from {
+        opacity: 0;
+        transform: translateX(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.05);
+      }
+    }
+
+    /* Enhanced Product Cards */
+    .product {
+      /* Removed animation for better performance */
+      transition: box-shadow 0.2s ease;
+    }
+
+    .product:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      /* Removed transform for better performance */
+    }
+
+    /* Better Button Hover Effects */
+    button {
+      transition: all 0.2s ease;
+    }
+
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Tab Transitions */
+    .tab {
+      transition: all 0.2s ease;
+    }
+
+    .tab:hover {
+      background: rgba(0, 124, 186, 0.1);
+    }
+
+    /* Comparison Item Hover */
+    .comparison-item {
+      transition: all 0.2s ease;
+    }
+
+    /* Stock Indicator Pulse - Disabled for performance */
+    /* .stock-in {
+      animation: pulse 2s ease-in-out infinite;
+    } */
+
+    /* Currency Button Transitions */
+    .currency-btn {
+      transition: all 0.2s ease;
+    }
+
+    .currency-btn:hover {
+      transform: scale(1.05);
+    }
+
+    /* Smooth Scrolling */
+    body {
+      scroll-behavior: smooth;
+    }
+
+    /* Link Hover Effects */
+    a {
+      transition: all 0.2s ease;
+    }
+
+    a:hover {
+      opacity: 0.8;
+      transform: translateX(2px);
+    }
+
+    /* Setting Toggle Animations */
+    .setting-group {
+      transition: all 0.2s ease;
+    }
+
+    .setting-group:hover {
+      background: #f0f0f0;
+      transform: translateX(3px);
+    }
+
+    /* Info Section Animations */
+    .info-section {
+      animation: fadeIn 0.4s ease;
+    }
+
+    /* Comparison Item Hover Effects */
+    .comparison-item-card:hover {
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .comparison-link:hover {
+      background: #005a87 !important;
+    }
+
+    .open-product-link:hover {
+      background: #5849c7 !important;
+    }
   </style>
 </head>
 
 <body>
-  <h2>Picksy</h2>
+  <div style="
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 15px;
+    margin: -10px -10px 15px -10px;
+    text-align: center;
+    border-radius: 0 0 10px 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  ">
+    <h2 style="
+      margin: 0;
+      color: white;
+      font-size: 24px;
+      font-weight: bold;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    ">🛍️ Picksy</h2>
+    <p style="
+      margin: 5px 0 0 0;
+      color: rgba(255,255,255,0.9);
+      font-size: 12px;
+      font-weight: 500;
+    ">Smart Shopping Assistant</p>
+  </div>
 
   <!-- Currency Toggle -->
   <div class="currency-toggle">
@@ -267,7 +439,18 @@
     <button id="currencyGBP" class="currency-btn">£ GBP</button>
   </div>
 
-  <button id="scanBtn">🔍 Scan This Page</button>
+  <button id="scanBtn" style="
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  ">🔍 Scan This Page</button>
 
   <!-- Tabs -->
   <div class="tabs">
@@ -279,25 +462,80 @@
 
   <!-- Current Product Tab -->
   <div id="current" class="tab-content active">
-    <div id="result"></div>
+    <div id="result">
+      <div style="
+        text-align: center;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border-radius: 10px;
+        margin-top: 10px;
+      ">
+        <div style="font-size: 64px; margin-bottom: 15px; animation: pulse 2s ease-in-out infinite;">🔍</div>
+        <h3 style="margin: 0 0 10px 0; color: #333;">Ready to Track Prices!</h3>
+        <p style="margin: 0; font-size: 14px; color: #666; line-height: 1.6;">
+          Visit any product page on:<br/>
+          <strong>Amazon • Flipkart • Myntra • Nike • Adidas • Puma</strong><br/>
+          <br/>
+          Then click <strong>"Scan This Page"</strong> above
+        </p>
+      </div>
+    </div>
   </div>
 
   <!-- History Tab -->
   <div id="history" class="tab-content">
     <div class="chart-container">
-      <div id="priceChart"></div>
+      <div id="priceChart">
+        <div style="
+          text-align: center;
+          padding: 40px 20px;
+          background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+          border-radius: 10px;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        ">
+          <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
+          <h3 style="margin: 0 0 8px 0; color: #333;">No Price History Yet</h3>
+          <p style="margin: 0; font-size: 13px; color: #666;">
+            Scan and save products to see price trends over time
+          </p>
+        </div>
+      </div>
     </div>
     <div id="historyDetails"></div>
   </div>
 
   <!-- Comparison Tab -->
   <div id="comparison" class="tab-content">
-    <div id="comparisonResults"></div>
+    <div id="comparisonResults">
+      <div style="
+        text-align: center;
+        padding: 40px 20px;
+        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        border-radius: 10px;
+        margin-top: 10px;
+      ">
+        <div style="font-size: 48px; margin-bottom: 10px;">🔄</div>
+        <h3 style="margin: 0 0 8px 0; color: #333;">Price Comparison</h3>
+        <p style="margin: 0; font-size: 13px; color: #666;">
+          Scan a product to see comparison links<br/>
+          and find the best deals across sites
+        </p>
+      </div>
+    </div>
   </div>
 
   <!-- Settings Tab -->
   <div id="settings" class="tab-content">
-    <h3>⚙️ Settings</h3>
+    <h3 style="
+      margin: 10px 0 15px 0;
+      color: #333;
+      font-size: 18px;
+      border-bottom: 2px solid #007cba;
+      padding-bottom: 8px;
+    ">⚙️ Settings</h3>
     
     <div class="setting-group">
       <label class="setting-label">
@@ -342,7 +580,26 @@
     </div>
   </div>
 
-  <h3>Saved Items</h3>
+  <h3 style="
+    margin: 20px 0 10px 0;
+    color: #333;
+    font-size: 16px;
+    border-bottom: 2px solid #28a745;
+    padding-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  ">
+    <span>💾 Saved Items</span>
+    <span id="savedItemsCount" style="
+      background: #28a745;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: bold;
+    ">0</span>
+  </h3>
   <div id="savedItems"></div>
 
   <script src="popup.js"></script>
