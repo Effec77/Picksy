@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
   checkServiceWorkerHealth(); // Check if background script is responsive
 });
 
+// Note: Tab cleanup removed - using mock results for now
+
 // Tab functionality
 function setupTabs() {
   document.querySelectorAll('.tab').forEach(tab => {
@@ -27,8 +29,11 @@ function setupTabs() {
       // Load tab-specific content
       if (targetTab === 'history' && currentProduct) {
         loadPriceHistory(currentProduct);
-      } else if (targetTab === 'comparison' && currentProduct) {
-        loadComparison(currentProduct);
+      }
+      
+      // Setup comparison tab when it's activated
+      if (targetTab === 'comparison') {
+        setupComparisonTab();
       }
     });
   });
@@ -92,12 +97,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     scanBtn.innerHTML = '🔍 Scan Current Page';
     
     currentProduct = msg.payload;
+    console.log('✅ Product scanned and stored:', currentProduct);
     
     // Check if scraping failed or no product detected
     if (!msg.payload || !msg.payload.title) {
       showNoProductDetected();
     } else {
       showResult(msg.payload);
+      // Update comparison tab to show product is ready
+      updateComparisonTabForProduct(msg.payload);
     }
   }
 });
@@ -108,6 +116,8 @@ function loadLastScrape() {
     if (result.picksyLastScrape) {
       currentProduct = result.picksyLastScrape;
       showResult(result.picksyLastScrape);
+      // Update comparison tab if product exists
+      updateComparisonTabForProduct(result.picksyLastScrape);
     }
   });
 }
@@ -128,7 +138,7 @@ function showResult(product) {
       const stars = '⭐'.repeat(Math.round(product.rating));
       trustSignalsHTML += `<span style="font-size: 14px;">${stars} ${product.rating}/5</span>`;
       if (product.reviewCount) {
-        trustSignalsHTML += ` <span style="color: #666; font-size: 12px;">(${product.reviewCount.toLocaleString()} reviews)</span>`;
+        trustSignalsHTML += ` <span style="color: #666; font-size: 12px;">(${product.reviewCount ? product.reviewCount.toLocaleString() : '0'} reviews)</span>`;
       }
       trustSignalsHTML += '<br/>';
     }
@@ -286,7 +296,7 @@ function createPriceChart(history) {
         <div style="font-size: 48px; margin-bottom: 10px;">📍</div>
         <h3 style="margin: 0 0 8px 0; color: #333;">First Data Point Recorded</h3>
         <p style="margin: 0; font-size: 13px; color: #666;">
-          Price: ₹${entry.price.toLocaleString()} on ${date}<br/>
+          Price: ₹${entry.price ? entry.price.toLocaleString() : 'N/A'} on ${date}<br/>
           Scan this product again to see price trends!
         </p>
       </div>
@@ -341,7 +351,7 @@ function createPriceChart(history) {
         border: 2px solid white;
         box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         z-index: 2;
-      " title="${date}: ₹${entry.price.toLocaleString()} - ${entry.stock ? 'In Stock' : 'Out of Stock'}"></div>
+      " title="${date}: ₹${entry.price ? entry.price.toLocaleString() : 'N/A'} - ${entry.stock ? 'In Stock' : 'Out of Stock'}"></div>
     `;
   });
   
@@ -361,8 +371,19 @@ function displayHistoryDetails(history) {
   const detailsDiv = document.getElementById('historyDetails');
   const latest = history[history.length - 1];
   const oldest = history[0];
-  const priceChange = latest.price - oldest.price;
-  const changePercent = ((priceChange / oldest.price) * 100).toFixed(1);
+  
+  // Safe price calculations with null checks
+  const latestPrice = latest.price || 0;
+  const oldestPrice = oldest.price || 0;
+  
+  let priceChange = 0;
+  let changePercent = '0.0';
+  
+  if (latestPrice > 0 && oldestPrice > 0) {
+    priceChange = latestPrice - oldestPrice;
+    changePercent = ((priceChange / oldestPrice) * 100).toFixed(1);
+  }
+  
   const trendColor = priceChange < 0 ? '#28a745' : priceChange > 0 ? '#dc3545' : '#6c757d';
   const trendIcon = priceChange < 0 ? '📉' : priceChange > 0 ? '📈' : '➡️';
 
@@ -372,7 +393,7 @@ function displayHistoryDetails(history) {
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
         <div style="background: white; padding: 8px; border-radius: 5px;">
           <strong style="color: #666; font-size: 11px;">CURRENT</strong><br/>
-          <span style="font-size: 16px; font-weight: bold; color: #007cba;">₹${latest.price.toLocaleString()}</span>
+          <span style="font-size: 16px; font-weight: bold; color: #007cba;">₹${latestPrice > 0 ? latestPrice.toLocaleString() : 'N/A'}</span>
         </div>
         <div style="background: white; padding: 8px; border-radius: 5px;">
           <strong style="color: #666; font-size: 11px;">CHANGE</strong><br/>
@@ -382,11 +403,11 @@ function displayHistoryDetails(history) {
         </div>
         <div style="background: white; padding: 8px; border-radius: 5px;">
           <strong style="color: #666; font-size: 11px;">LOWEST</strong><br/>
-          <span style="font-size: 16px; font-weight: bold; color: #28a745;">₹${Math.min(...history.map(h => h.price)).toLocaleString()}</span>
+          <span style="font-size: 16px; font-weight: bold; color: #28a745;">₹${Math.min(...history.map(h => h.price || 0).filter(p => p > 0)).toLocaleString()}</span>
         </div>
         <div style="background: white; padding: 8px; border-radius: 5px;">
           <strong style="color: #666; font-size: 11px;">HIGHEST</strong><br/>
-          <span style="font-size: 16px; font-weight: bold; color: #dc3545;">₹${Math.max(...history.map(h => h.price)).toLocaleString()}</span>
+          <span style="font-size: 16px; font-weight: bold; color: #dc3545;">₹${Math.max(...history.map(h => h.price || 0).filter(p => p > 0)).toLocaleString()}</span>
         </div>
       </div>
       <p style="margin: 12px 0 0 0; font-size: 12px; color: #666; text-align: center;">
@@ -396,8 +417,8 @@ function displayHistoryDetails(history) {
   `;
 }
 
-// Load cross-site comparison
-function loadComparison(product) {
+// Load cross-site comparison (DISABLED - Using new AI comparison system)
+function loadComparison_OLD_DISABLED(product) {
   const comparisonDiv = document.getElementById('comparisonResults');
 
   // If no comparison URLs, generate them from the title
@@ -1302,3 +1323,531 @@ function showToast(message, type = 'info') {
     }, 300);
   }, 3000);
 }
+
+// ==================== PRICE COMPARISON FUNCTIONALITY ====================
+
+// Price Comparison Functionality
+// Note: currentProduct is already declared at the top of the file
+
+// Start price comparison
+async function startPriceComparison() {
+  console.log('🚀 Starting price comparison...');
+  console.log('🚀 Current product state:', currentProduct);
+  
+  try {
+    // Use existing product data if available, otherwise get fresh data
+    if (!currentProduct || !currentProduct.title) {
+      console.log('📡 No current product, fetching fresh data...');
+      showToast('⏳ Getting product data...', 'info');
+      currentProduct = await getCurrentProductData();
+    } else {
+      console.log('📦 Using existing product data:', currentProduct.title);
+    }
+    
+    if (!currentProduct || !currentProduct.title) {
+      console.error('❌ No product data available');
+      showToast('❌ Please scan a product first', 'error');
+      return;
+    }
+    
+    console.log('📦 Current product for comparison:', {
+      title: currentProduct.title,
+      price: currentProduct.price,
+      source: currentProduct.source
+    });
+    
+    // Show progress
+    showComparisonProgress();
+    showToast('🔍 Starting price comparison...', 'info');
+    
+    // Load price comparison engine
+    await loadPriceComparisonEngine();
+    
+    // Start comparison with more lenient settings
+    console.log('🎯 Calling PriceComparison.compareProductPrices...');
+    const results = await PriceComparison.compareProductPrices(currentProduct, {
+      maxSites: 12,
+      timeout: 30000,
+      enableAI: true,
+      minTrustScore: 5 // Lower threshold for more results
+    });
+    
+    console.log('🎯 Comparison results received:', results);
+    console.log('🎯 Results structure check:', {
+      hasResults: !!results,
+      hasMatches: !!(results?.matches),
+      matchesLength: results?.matches?.length || 0,
+      hasBestDeal: !!(results?.bestDeal),
+      hasAnalysis: !!(results?.analysis)
+    });
+    
+    if (!results) {
+      throw new Error('No results returned from comparison engine');
+    }
+    
+    // Display results
+    displayComparisonResults(results);
+    showToast(`✅ Found ${results.matches?.length || 0} matches`, 'success');
+    
+  } catch (error) {
+    console.error('❌ Price comparison failed:', error);
+    console.error('❌ Error stack:', error.stack);
+    showComparisonError(error.message);
+    showToast(`❌ Comparison failed: ${error.message}`, 'error');
+  }
+}
+
+// Get current product data
+async function getCurrentProductData() {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const tab = tabs[0];
+      
+      chrome.tabs.sendMessage(tab.id, { type: 'PICKSY_SCRAPE' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Failed to get product data:', chrome.runtime.lastError.message);
+          resolve(null);
+        } else {
+          resolve(response);
+        }
+      });
+    });
+  });
+}
+
+// Load price comparison engine
+async function loadPriceComparisonEngine() {
+  if (typeof PriceComparison === 'undefined') {
+    console.error('❌ PriceComparison script not loaded');
+    console.log('Available globals:', Object.keys(window).filter(k => k.toLowerCase().includes('price')));
+    
+    // Try to load the script dynamically
+    try {
+      console.log('🔄 Attempting to load PriceComparison script...');
+      const script = document.createElement('script');
+      script.src = '../../utils/priceComparison.js';
+      document.head.appendChild(script);
+      
+      // Wait for script to load
+      await new Promise((resolve, reject) => {
+        script.onload = resolve;
+        script.onerror = reject;
+        setTimeout(reject, 5000); // 5 second timeout
+      });
+      
+      if (typeof PriceComparison === 'undefined') {
+        throw new Error('PriceComparison still not available after loading script');
+      }
+      
+      console.log('✅ PriceComparison script loaded dynamically');
+    } catch (error) {
+      console.error('❌ Failed to load PriceComparison script:', error);
+      throw new Error('PriceComparison script not available - please reload the extension');
+    }
+  } else {
+    console.log('✅ PriceComparison script already loaded');
+    console.log('Available methods:', Object.keys(PriceComparison));
+  }
+}
+
+// Show comparison progress
+function showComparisonProgress() {
+  document.getElementById('comparisonResults').style.display = 'none';
+  document.getElementById('comparisonProgress').style.display = 'block';
+  document.getElementById('comparisonResultsContainer').style.display = 'none';
+  
+  // Animate progress bar
+  let progress = 0;
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  
+  const progressSteps = [
+    'Extracting product details...',
+    'Generating search URLs...',
+    'Opening invisible tabs...',
+    'Scraping site 1/12...',
+    'Scraping site 3/12...',
+    'Scraping site 6/12...',
+    'Scraping site 9/12...',
+    'Scraping site 12/12...',
+    'Matching products...',
+    'Analyzing results...',
+    'Complete!'
+  ];
+  
+  let stepIndex = 0;
+  const interval = setInterval(() => {
+    progress += 10;
+    progressBar.style.width = `${Math.min(progress, 100)}%`;
+    
+    if (stepIndex < progressSteps.length) {
+      progressText.textContent = progressSteps[stepIndex];
+      stepIndex++;
+    }
+    
+    if (progress >= 100) {
+      clearInterval(interval);
+    }
+  }, 1000);
+}
+
+// Display comparison results
+function displayComparisonResults(results) {
+  console.log('📊 Displaying comparison results:', results);
+  console.log('📊 Results structure:', {
+    matches: results?.matches?.length || 0,
+    bestDeal: !!results?.bestDeal,
+    analysis: !!results?.analysis
+  });
+  
+  // Hide progress, show results
+  document.getElementById('comparisonProgress').style.display = 'none';
+  document.getElementById('comparisonResultsContainer').style.display = 'block';
+  
+  // Display best deal
+  if (results.bestDeal) {
+    displayBestDeal(results.bestDeal, results.savings, results.savingsPercent);
+  }
+  
+  // Display all results
+  displayAllResults(results.matches);
+  
+  // Display statistics
+  displayComparisonStats(results.analysis);
+  
+  // Update results count
+  document.getElementById('resultsCount').textContent = results.matches.length;
+  
+  // Add event listeners for deal buttons
+  document.querySelectorAll('.deal-button').forEach(button => {
+    button.addEventListener('click', () => {
+      window.open(button.dataset.url, '_blank');
+    });
+  });
+  
+  document.querySelectorAll('.match-button').forEach(button => {
+    button.addEventListener('click', () => {
+      window.open(button.dataset.url, '_blank');
+    });
+  });
+}
+
+// Display best deal card
+function displayBestDeal(bestDeal, savings, savingsPercent) {
+  const bestDealContent = document.getElementById('bestDealContent');
+  
+  bestDealContent.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+      <div>
+        <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">
+          ₹${bestDeal.priceValue.toLocaleString()}
+        </div>
+        <div style="font-size: 14px; opacity: 0.9;">
+          ${bestDeal.siteName} • Trust: ${bestDeal.trustScore}/10
+        </div>
+      </div>
+      <div style="text-align: right;">
+        ${savings > 0 ? `
+          <div style="font-size: 16px; font-weight: bold; color: #ffeb3b;">
+            Save ₹${savings.toLocaleString()}
+          </div>
+          <div style="font-size: 12px; opacity: 0.8;">
+            ${savingsPercent.toFixed(1)}% off
+          </div>
+        ` : `
+          <div style="font-size: 14px; opacity: 0.9;">
+            Best available price
+          </div>
+        `}
+      </div>
+    </div>
+    <button class="deal-button" data-url="${bestDeal.url}" style="
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 20px;
+      width: 100%;
+      cursor: pointer;
+      font-weight: bold;
+    ">
+      🛒 View Deal
+    </button>
+  `;
+}
+
+// Display all results
+function displayAllResults(matches) {
+  const allResults = document.getElementById('allResults');
+  
+  if (matches.length === 0) {
+    allResults.innerHTML = `
+      <div style="text-align: center; padding: 20px; color: #666;">
+        No matching products found
+      </div>
+    `;
+    return;
+  }
+  
+  // Create table format for better comparison
+  allResults.innerHTML = `
+    <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+            <th style="padding: 12px 8px; text-align: left; font-size: 12px; font-weight: bold; color: #495057;">Site</th>
+            <th style="padding: 12px 8px; text-align: right; font-size: 12px; font-weight: bold; color: #495057;">Price</th>
+            <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Trust</th>
+            <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Match</th>
+            <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${matches.map((match, index) => `
+            <tr style="border-bottom: 1px solid #e9ecef; ${index % 2 === 0 ? 'background: #f8f9fa;' : 'background: white;'}">
+              <td style="padding: 12px 8px;">
+                <div style="font-weight: 500; color: #333; margin-bottom: 2px;">${match.siteName}</div>
+                <div style="font-size: 11px; color: #666; line-height: 1.3;">
+                  ${match.title.substring(0, 40)}${match.title.length > 40 ? '...' : ''}
+                </div>
+              </td>
+              <td style="padding: 12px 8px; text-align: right;">
+                <span style="font-size: 14px; font-weight: bold; color: ${match.error ? '#dc3545' : '#007cba'};">
+                  ${match.error ? 'Failed' : (match.priceValue > 0 ? '₹' + match.priceValue.toLocaleString() : 'N/A')}
+                </span>
+              </td>
+              <td style="padding: 12px 8px; text-align: center;">
+                <span style="
+                  background: ${match.trustScore >= 8 ? '#28a745' : match.trustScore >= 6 ? '#ffc107' : '#dc3545'};
+                  color: white;
+                  padding: 3px 8px;
+                  border-radius: 12px;
+                  font-size: 10px;
+                  font-weight: bold;
+                ">
+                  ${match.trustScore}/10
+                </span>
+              </td>
+              <td style="padding: 12px 8px; text-align: center;">
+                <span style="
+                  background: ${match.similarity >= 0.8 ? '#28a745' : '#ffc107'};
+                  color: white;
+                  padding: 3px 8px;
+                  border-radius: 12px;
+                  font-size: 10px;
+                  font-weight: bold;
+                ">
+                  ${Math.round(match.similarity * 100)}%
+                </span>
+              </td>
+              <td style="padding: 12px 8px; text-align: center;">
+                <button class="match-button" data-url="${match.url}" style="
+                  background: #007cba;
+                  color: white;
+                  border: none;
+                  padding: 6px 12px;
+                  border-radius: 12px;
+                  cursor: pointer;
+                  font-size: 11px;
+                  font-weight: 500;
+                ">
+                  View
+                </button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// Display comparison statistics
+function displayComparisonStats(analysis) {
+  const statsContent = document.getElementById('statsContent');
+  
+  statsContent.innerHTML = `
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 12px;">
+      <div>
+        <strong>Sites Checked:</strong><br>
+        ${analysis.totalSites} sites
+      </div>
+      <div>
+        <strong>Successful Matches:</strong><br>
+        ${analysis.successfulMatches} products
+      </div>
+      <div>
+        <strong>Average Price:</strong><br>
+        ₹${analysis.averagePrice.toLocaleString()}
+      </div>
+      <div>
+        <strong>Price Range:</strong><br>
+        ₹${analysis.priceRange.min.toLocaleString()} - ₹${analysis.priceRange.max.toLocaleString()}
+      </div>
+    </div>
+  `;
+}
+
+// Show comparison error
+function showComparisonError(message) {
+  document.getElementById('comparisonProgress').style.display = 'none';
+  document.getElementById('comparisonResultsContainer').innerHTML = `
+    <div style="
+      background: #f8d7da;
+      color: #721c24;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      margin: 15px 0;
+    ">
+      <div style="font-size: 24px; margin-bottom: 10px;">❌</div>
+      <h4 style="margin: 0 0 10px 0;">Comparison Failed</h4>
+      <p style="margin: 0; font-size: 14px;">${message}</p>
+      <button id="retryComparisonBtn" style="
+        background: #721c24;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 15px;
+        margin-top: 15px;
+        cursor: pointer;
+      ">
+        Try Again
+      </button>
+    </div>
+  `;
+  document.getElementById('comparisonResultsContainer').style.display = 'block';
+  
+  // Add event listener for retry button
+  const retryBtn = document.getElementById('retryComparisonBtn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', startPriceComparison);
+  }
+}
+
+// Setup comparison tab functionality
+function setupComparisonTab() {
+  console.log('🔧 Setting up comparison tab...');
+  
+  const startComparisonBtn = document.getElementById('startComparisonBtn');
+  if (startComparisonBtn) {
+    // Remove any existing listeners to prevent duplicates
+    startComparisonBtn.replaceWith(startComparisonBtn.cloneNode(true));
+    const newBtn = document.getElementById('startComparisonBtn');
+    
+    newBtn.addEventListener('click', () => {
+      console.log('🚀 Comparison button clicked!');
+      startPriceComparison();
+    });
+    
+    console.log('✅ Comparison button event listener attached');
+  } else {
+    console.warn('⚠️ Start comparison button not found');
+  }
+}
+
+// Update comparison tab when product is scanned
+function updateComparisonTabForProduct(product) {
+  console.log('🔄 Updating comparison tab for product:', product.title);
+  
+  const comparisonResults = document.getElementById('comparisonResults');
+  if (!comparisonResults) return;
+  
+  // Update the comparison tab to show the product is ready
+  comparisonResults.innerHTML = `
+    <div style="
+      text-align: center;
+      padding: 40px 20px;
+      background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+      color: white;
+      border-radius: 10px;
+      margin-top: 10px;
+    ">
+      <div style="font-size: 48px; margin-bottom: 10px;">✅</div>
+      <h3 style="margin: 0 0 8px 0; color: white;">Product Ready for Comparison</h3>
+      <p style="margin: 0 0 15px 0; font-size: 13px; color: rgba(255,255,255,0.9);">
+        <strong>${product.title.substring(0, 60)}${product.title.length > 60 ? '...' : ''}</strong><br/>
+        Compare prices across 12+ verified sites
+      </p>
+      <button id="startComparisonBtn" style="
+        background: rgba(255,255,255,0.2);
+        border: 2px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 25px;
+        margin-top: 15px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      ">
+        🔍 Start Comparison
+      </button>
+    </div>
+    
+    <!-- Comparison Progress -->
+    <div id="comparisonProgress" style="display: none;">
+      <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0;">
+        <h4 style="margin: 0 0 10px 0; color: #333;">🔍 Comparing Prices...</h4>
+        <div style="background: #e9ecef; height: 8px; border-radius: 4px; overflow: hidden;">
+          <div id="progressBar" style="background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+        </div>
+        <p id="progressText" style="margin: 10px 0 0 0; font-size: 12px; color: #666;">Initializing...</p>
+      </div>
+    </div>
+    
+    <!-- Comparison Results -->
+    <div id="comparisonResultsContainer" style="display: none;">
+      <!-- Best Deal Card -->
+      <div id="bestDealCard" style="
+        background: linear-gradient(135deg, #28a745, #20c997);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 15px 0;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+      ">
+        <h3 style="margin: 0 0 10px 0; display: flex; align-items: center;">
+          🏆 <span style="margin-left: 8px;">Best Deal Found</span>
+        </h3>
+        <div id="bestDealContent"></div>
+      </div>
+      
+      <!-- All Results -->
+      <div id="allResultsContainer">
+        <h4 style="margin: 0 0 15px 0; color: #333; display: flex; align-items: center;">
+          📊 <span style="margin-left: 8px;">All Results</span>
+          <span id="resultsCount" style="
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            margin-left: 10px;
+          "></span>
+        </h4>
+        <div id="allResults"></div>
+      </div>
+      
+      <!-- Comparison Stats -->
+      <div id="comparisonStats" style="
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+        border-left: 4px solid #667eea;
+      ">
+        <h5 style="margin: 0 0 10px 0; color: #333;">📈 Comparison Statistics</h5>
+        <div id="statsContent"></div>
+      </div>
+    </div>
+  `;
+  
+  // Re-setup the comparison button
+  setupComparisonTab();
+}
+
+// Make functions globally available
+window.startPriceComparison = startPriceComparison;
+window.displayComparisonResults = displayComparisonResults;
+window.setupComparisonTab = setupComparisonTab;
+window.updateComparisonTabForProduct = updateComparisonTabForProduct;

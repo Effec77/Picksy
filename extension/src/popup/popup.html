@@ -513,16 +513,87 @@
       <div style="
         text-align: center;
         padding: 40px 20px;
-        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
         border-radius: 10px;
         margin-top: 10px;
       ">
-        <div style="font-size: 48px; margin-bottom: 10px;">🔄</div>
-        <h3 style="margin: 0 0 8px 0; color: #333;">Price Comparison</h3>
-        <p style="margin: 0; font-size: 13px; color: #666;">
-          Scan a product to see comparison links<br/>
-          and find the best deals across sites
+        <div style="font-size: 48px; margin-bottom: 10px;">🚀</div>
+        <h3 style="margin: 0 0 8px 0; color: white;">AI-Powered Price Comparison</h3>
+        <p style="margin: 0; font-size: 13px; color: rgba(255,255,255,0.9);">
+          Compare prices across 12+ verified sites<br/>
+          Find the best deals with AI-powered matching
         </p>
+        <button id="startComparisonBtn" style="
+          background: rgba(255,255,255,0.2);
+          border: 2px solid rgba(255,255,255,0.3);
+          color: white;
+          padding: 12px 24px;
+          border-radius: 25px;
+          margin-top: 15px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        ">
+          🔍 Start Comparison
+        </button>
+      </div>
+      
+      <!-- Comparison Progress -->
+      <div id="comparisonProgress" style="display: none;">
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0;">
+          <h4 style="margin: 0 0 10px 0; color: #333;">🔍 Comparing Prices...</h4>
+          <div style="background: #e9ecef; height: 8px; border-radius: 4px; overflow: hidden;">
+            <div id="progressBar" style="background: linear-gradient(90deg, #667eea, #764ba2); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
+          </div>
+          <p id="progressText" style="margin: 10px 0 0 0; font-size: 12px; color: #666;">Initializing...</p>
+        </div>
+      </div>
+      
+      <!-- Comparison Results -->
+      <div id="comparisonResultsContainer" style="display: none;">
+        <!-- Best Deal Card -->
+        <div id="bestDealCard" style="
+          background: linear-gradient(135deg, #28a745, #20c997);
+          color: white;
+          padding: 20px;
+          border-radius: 10px;
+          margin: 15px 0;
+          box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        ">
+          <h3 style="margin: 0 0 10px 0; display: flex; align-items: center;">
+            🏆 <span style="margin-left: 8px;">Best Deal Found</span>
+          </h3>
+          <div id="bestDealContent"></div>
+        </div>
+        
+        <!-- All Results -->
+        <div id="allResultsContainer">
+          <h4 style="margin: 0 0 15px 0; color: #333; display: flex; align-items: center;">
+            📊 <span style="margin-left: 8px;">All Results</span>
+            <span id="resultsCount" style="
+              background: #667eea;
+              color: white;
+              padding: 2px 8px;
+              border-radius: 12px;
+              font-size: 11px;
+              margin-left: 10px;
+            "></span>
+          </h4>
+          <div id="allResults"></div>
+        </div>
+        
+        <!-- Comparison Stats -->
+        <div id="comparisonStats" style="
+          background: #f8f9fa;
+          padding: 15px;
+          border-radius: 8px;
+          margin-top: 15px;
+          border-left: 4px solid #667eea;
+        ">
+          <h5 style="margin: 0 0 10px 0; color: #333;">📈 Comparison Statistics</h5>
+          <div id="statsContent"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -602,6 +673,7 @@
   </h3>
   <div id="savedItems"></div>
 
+  <script src="../../utils/priceComparison.js"></script>
   <script src="popup.js"></script>
 </body>
 

@@ -7,13 +7,22 @@ let keepAliveInterval;
 function startKeepAlive() {
   if (keepAliveInterval) return;
   keepAliveInterval = setInterval(() => {
-    chrome.runtime.getPlatformInfo(() => {
+    // Use Promise-based API to avoid callback errors
+    chrome.runtime.getPlatformInfo().then(() => {
       // Just a ping to keep service worker alive
+    }).catch((error) => {
+      // Silently ignore errors - this is just a keepalive ping
+      console.debug('Keepalive ping:', error.message);
     });
   }, 20000); // Every 20 seconds
 }
 
-startKeepAlive();
+// Initialize keepalive when service worker starts
+try {
+  startKeepAlive();
+} catch (error) {
+  console.error('Failed to start keepalive:', error);
+}
 
 // ----------------- INSTALL DEFAULTS -----------------
 chrome.runtime.onInstalled.addListener(() => {

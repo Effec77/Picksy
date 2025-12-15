@@ -1,6 +1,34 @@
-// content.js
+// content.js - Enhanced with AI Fallback
 // Safe content script: responds to PICKSY_SCRAPE and returns a product object.
-// Keeps messaging exactly like before to avoid connection issues.
+// Now includes AI fallback when universal extraction has low confidence.
+
+// Prevent multiple injections
+if (window.picksyContentScriptLoaded) {
+  console.log('🔄 Picksy content script already loaded, skipping...');
+} else {
+  window.picksyContentScriptLoaded = true;
+  console.log('🚀 Loading Picksy content script...');
+
+// AI Configuration
+let aiConfig = null;
+
+// Load AI configuration
+async function loadAIConfig() {
+  try {
+    const result = await chrome.storage.sync.get(['geminiApiKey']);
+    aiConfig = {
+      apiKey: result.geminiApiKey || null,
+      enabled: !!result.geminiApiKey
+    };
+    console.log('🤖 AI Config loaded:', aiConfig.enabled ? 'Enabled' : 'Disabled');
+  } catch (error) {
+    console.error('Failed to load AI config:', error);
+    aiConfig = { apiKey: null, enabled: false };
+  }
+}
+
+// Initialize AI config
+loadAIConfig();
 
 // ---------------- TITLE ----------------
 function simpleTitle() {
@@ -433,6 +461,8 @@ function extractPrice() {
         if (v) {
           console.log(`✅ Found price via ${sel}:`, t, "→", v, "→", formatPrice(v, detectedCurrency));
           return { display: formatPrice(v, detectedCurrency), value: v, via: `amazon:${sel}` };
+        } else if (t) {
+          console.log(`⚠️ Could not parse price from "${t}"`);
         }
       }
     } else if (location.hostname.includes("flipkart")) {
@@ -1423,72 +1453,234 @@ function extractTrustSignals() {
 // ---------------- MAIN SCRAPE ----------------
 async function scrapeProduct() {
   try {
-    // Auto-detect website currency
-    const detectedCurrency = detectWebsiteCurrency();
-
-    // Get user currency preference from storage (for manual override)
-    const result = await chrome.storage.local.get(['picksyCurrency']);
-    const userCurrency = result.picksyCurrency;
-
-    // Use user preference if set, otherwise use detected currency
-    const finalCurrency = userCurrency || detectedCurrency;
-
-    const p = extractPrice();
-    const avail = detectAvailability();
-    const title = simpleTitle();
-    const trustSignals = extractTrustSignals();
-
-    // Generate cross-site comparison data
-    const keywords = extractProductKeywords(title);
-    const comparisonUrls = generateSearchUrls(keywords, location.hostname);
-
-    const data = {
-      source: location.hostname,
-      url: canonicalUrl(),
-      title: title,
-      price: p.display, // Already formatted with detected currency
-      priceValue: p.value,
-      currency: detectedCurrency, // Show what was detected
-      userCurrency: finalCurrency, // Show user preference
-      availability: avail.status,
-      availabilityReason: avail.reason,
-      rating: trustSignals.rating,
-      reviewCount: trustSignals.reviewCount,
-      seller: trustSignals.seller,
-      badges: trustSignals.badges,
-      keywords: keywords, // For cross-site comparison
-      comparisonUrls: comparisonUrls, // URLs to check other sites
-      scrapedAt: new Date().toISOString()
-    };
-
-    console.log("🔍 Scraped Product Data:", data);
-    return data;
+    console.log("🔍 Starting hybrid extraction...");
+    
+    // Step 1: Universal Extraction (Primary Method)
+    const universalResult = await extractWithUniversalMethod();
+    
+    // Step 2: Check if AI fallback is needed
+    const needsAIFallback = shouldUseAIFallback(universalResult);
+    
+    if (needsAIFallback && aiConfig?.enabled) {
+      console.log("⚠️ Universal extraction incomplete, trying AI fallback...");
+      const aiResult = await extractWithAI();
+      
+      if (aiResult && aiResult.confidence > 0.7) {
+        console.log("✅ AI extraction successful");
+        return enhanceResultWithMetadata(aiResult, 'ai');
+      }
+    }
+    
+    console.log("✅ Using universal extraction result");
+    return enhanceResultWithMetadata(universalResult, 'universal');
+    
   } catch (e) {
     console.error("scrapeProduct failed", e);
-    return {
-      source: location.hostname,
-      url: canonicalUrl(),
-      title: simpleTitle(),
-      price: "",
-      priceValue: null,
-      currency: 'USD',
-      userCurrency: 'USD',
-      availability: "Unknown",
-      availabilityReason: "error",
-      rating: null,
-      reviewCount: null,
-      seller: null,
-      badges: [],
-      keywords: [],
-      comparisonUrls: [],
-      scrapedAt: new Date().toISOString()
-    };
+    return createFallbackResult();
   }
+}
+
+// Universal extraction method (existing logic)
+async function extractWithUniversalMethod() {
+  // Auto-detect website currency
+  const detectedCurrency = detectWebsiteCurrency();
+
+  // Get user currency preference from storage (for manual override)
+  const result = await chrome.storage.local.get(['picksyCurrency']);
+  const userCurrency = result.picksyCurrency;
+
+  // Use user preference if set, otherwise use detected currency
+  const finalCurrency = userCurrency || detectedCurrency;
+
+  const p = extractPrice();
+  const avail = detectAvailability();
+  const title = simpleTitle();
+  const trustSignals = extractTrustSignals();
+
+  // Generate cross-site comparison data
+  const keywords = extractProductKeywords(title);
+  const comparisonUrls = generateSearchUrls(keywords, location.hostname);
+
+  const data = {
+    source: location.hostname,
+    url: canonicalUrl(),
+    title: title,
+    price: p.display, // Already formatted with detected currency
+    priceValue: p.value,
+    currency: detectedCurrency, // Show what was detected
+    userCurrency: finalCurrency, // Show user preference
+    availability: avail.status,
+    availabilityReason: avail.reason,
+    rating: trustSignals.rating,
+    reviewCount: trustSignals.reviewCount,
+    seller: trustSignals.seller,
+    badges: trustSignals.badges,
+    keywords: keywords, // For cross-site comparison
+    comparisonUrls: comparisonUrls, // URLs to check other sites
+    scrapedAt: new Date().toISOString()
+  };
+
+  console.log("🔍 Universal extraction result:", data);
+  return data;
+}
+
+// Check if AI fallback is needed
+function shouldUseAIFallback(result) {
+  if (!result) return true;
+  
+  // Use AI if critical data is missing
+  const hasTitle = result.title && result.title.length > 5;
+  const hasPrice = result.priceValue && result.priceValue > 0;
+  
+  if (!hasTitle || !hasPrice) {
+    console.log("🤖 AI fallback needed: missing critical data");
+    return true;
+  }
+  
+  // Use AI if confidence is low (generic title, no price, etc.)
+  const confidence = calculateUniversalConfidence(result);
+  if (confidence < 0.7) {
+    console.log(`🤖 AI fallback needed: low confidence (${(confidence * 100).toFixed(1)}%)`);
+    return true;
+  }
+  
+  return false;
+}
+
+// Calculate confidence for universal extraction
+function calculateUniversalConfidence(result) {
+  let confidence = 0.3; // Base confidence
+  
+  if (result.title && result.title.length > 10) confidence += 0.2;
+  if (result.priceValue && result.priceValue > 0) confidence += 0.3;
+  if (result.availability && result.availability !== 'Unknown') confidence += 0.1;
+  if (result.rating && result.rating > 0) confidence += 0.1;
+  if (result.seller && result.seller.length > 2) confidence += 0.1;
+  
+  return Math.min(confidence, 1.0);
+}
+
+// AI extraction method
+async function extractWithAI() {
+  try {
+    console.log("🤖 Starting AI extraction...");
+    
+    if (!aiConfig?.apiKey) {
+      console.log("❌ No API key configured for AI extraction");
+      return null;
+    }
+    
+    // Get page HTML (limit size for API)
+    const html = document.documentElement.outerHTML.substring(0, 15000);
+    
+    const prompt = `
+Extract product details from this e-commerce page HTML.
+Return JSON with: title, price, currency, originalPrice, discount, stock, rating, reviews, seller, image, confidence.
+
+HTML: ${html}
+`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${aiConfig.apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: prompt
+          }]
+        }]
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const text = data.candidates[0].content.parts[0].text;
+    
+    // Parse JSON response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const aiResult = JSON.parse(jsonMatch[0]);
+      console.log("🤖 AI extraction result:", aiResult);
+      
+      // Convert AI result to our format
+      return {
+        source: location.hostname,
+        url: canonicalUrl(),
+        title: aiResult.title || '',
+        price: aiResult.price ? `₹${aiResult.price}` : '',
+        priceValue: aiResult.price || null,
+        currency: aiResult.currency || 'INR',
+        userCurrency: aiResult.currency || 'INR',
+        availability: aiResult.stock || 'Unknown',
+        availabilityReason: 'ai-extracted',
+        rating: aiResult.rating || null,
+        reviewCount: aiResult.reviews || null,
+        seller: aiResult.seller || location.hostname,
+        badges: [],
+        keywords: extractProductKeywords(aiResult.title || ''),
+        comparisonUrls: [],
+        scrapedAt: new Date().toISOString(),
+        confidence: aiResult.confidence || 0.8
+      };
+    }
+    
+    throw new Error('No valid JSON in Gemini response');
+    
+  } catch (error) {
+    console.error("🤖 AI extraction failed:", error);
+    return null;
+  }
+}
+
+// Enhance result with metadata
+function enhanceResultWithMetadata(result, method) {
+  return {
+    ...result,
+    extractionMethod: method,
+    confidence: method === 'ai' ? (result.confidence || 0.8) : calculateUniversalConfidence(result),
+    hybridSystem: true
+  };
+}
+
+// Create fallback result
+function createFallbackResult() {
+  return {
+    source: location.hostname,
+    url: canonicalUrl(),
+    title: simpleTitle() || document.title || `Product from ${location.hostname}`,
+    price: "",
+    priceValue: null,
+    currency: 'USD',
+    userCurrency: 'USD',
+    availability: "Unknown",
+    availabilityReason: "error",
+    rating: null,
+    reviewCount: null,
+    seller: location.hostname,
+    badges: [],
+    keywords: [],
+    comparisonUrls: [],
+    scrapedAt: new Date().toISOString(),
+    extractionMethod: 'fallback',
+    confidence: 0.2,
+    hybridSystem: true
+  };
 }
 
 // ---------------- MESSAGING ----------------
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   console.log("🔧 Content script received message:", msg);
+
+  if (msg?.type === "PICKSY_PING") {
+    // Simple ping to check if content script is ready
+    sendResponse({ ready: true });
+    return true;
+  }
 
   if (msg?.type === "PICKSY_SCRAPE") {
     console.log("🔧 Starting product scrape...");
@@ -1523,3 +1715,5 @@ try {
 } catch (error) {
   console.error("🔧 Content script initialization error:", error);
 }
+
+} // End of injection guard
