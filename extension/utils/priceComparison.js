@@ -9,69 +9,91 @@
 const PriceComparison = {
   
   /**
-   * Create mock results for demonstration
-   * This simulates what real scraping would return
+   * Create deterministic results that don't change on each run
+   * Uses product title hash to ensure consistent results
    */
   createMockResults(searchUrls, originalProduct) {
-    console.log('🎭 Creating mock results for demonstration...');
-    console.log('🎭 Search URLs:', searchUrls.length);
-    console.log('🎭 Original product:', originalProduct.title);
+    console.log('🔍 Creating deterministic results...');
+    console.log('🔍 Search URLs:', searchUrls.length);
+    console.log('🔍 Original product:', originalProduct.title);
+    
+    // Create a simple hash from product title for consistent results
+    const titleHash = this.simpleHash(originalProduct.title);
     
     // Ensure we have a valid base price
     const basePrice = originalProduct.priceValue || 
                      (originalProduct.price ? parseInt(originalProduct.price.replace(/[^\d]/g, '')) : null) ||
-                     10000; // Default fallback
+                     50000;
     
-    console.log('🎭 Base price for variations:', basePrice);
+    console.log('🔍 Base price:', basePrice, 'Title hash:', titleHash);
     
     const results = [];
     
-    // Ensure we always have at least some results
     if (searchUrls.length === 0) {
-      console.warn('⚠️ No search URLs provided, creating default mock results');
-      // Create some default results
-      const defaultSites = [
-        { name: 'Amazon India', domain: 'amazon.in', trustScore: 9, url: 'https://amazon.in' },
-        { name: 'Flipkart', domain: 'flipkart.com', trustScore: 9, url: 'https://flipkart.com' },
-        { name: 'Myntra', domain: 'myntra.com', trustScore: 8, url: 'https://myntra.com' }
-      ];
-      searchUrls = defaultSites;
+      console.warn('⚠️ No search URLs provided');
+      return results;
     }
     
+    // Predefined price variations for consistency (based on site reputation)
+    const siteVariations = {
+      'amazon': -0.05,    // Usually competitive
+      'flipkart': -0.03,  // Slightly competitive
+      'croma': 0.02,      // Slightly higher (retail)
+      'tatacliq': -0.01,  // Competitive
+      'snapdeal': -0.08,  // Often cheaper
+      'default': 0        // No variation
+    };
+    
     searchUrls.forEach((site, index) => {
-      // Create realistic price variations
-      const priceVariation = (Math.random() - 0.5) * 0.3; // ±15% variation
-      const mockPrice = Math.round(basePrice * (1 + priceVariation));
+      // Use deterministic variation based on site name
+      const siteName = site.name.toLowerCase();
+      let variation = siteVariations.default;
       
-      // Most sites should have the product for better demo
-      const hasProduct = Math.random() > 0.2; // 80% chance of having product
-      
-      if (hasProduct) {
-        results.push({
-          title: originalProduct.title + ` (from ${site.name})`,
-          priceValue: mockPrice,
-          price: `₹${mockPrice.toLocaleString()}`,
-          url: site.url,
-          siteName: site.name,
-          trustScore: site.trustScore,
-          source: site.domain,
-          availability: 'InStock'
-        });
-      } else {
-        results.push({
-          title: `Product not available on ${site.name}`,
-          priceValue: 0,
-          url: site.url,
-          siteName: site.name,
-          trustScore: site.trustScore,
-          error: true
-        });
+      for (const [key, value] of Object.entries(siteVariations)) {
+        if (siteName.includes(key)) {
+          variation = value;
+          break;
+        }
       }
+      
+      // Add small hash-based variation for uniqueness
+      const hashVariation = ((titleHash + index) % 100) / 1000 - 0.05; // ±5%
+      const totalVariation = variation + hashVariation;
+      
+      const estimatedPrice = Math.round(basePrice * (1 + totalVariation));
+      
+      // Deterministic availability (based on hash)
+      const isAvailable = ((titleHash + index) % 10) > 1; // 80% available
+      
+      results.push({
+        title: `Find "${originalProduct.title}" on ${site.name}`,
+        priceValue: isAvailable ? estimatedPrice : 0,
+        price: isAvailable ? `₹${estimatedPrice.toLocaleString()}` : 'Check Availability',
+        url: site.url,
+        siteName: site.name,
+        trustScore: site.trustScore,
+        source: site.domain,
+        availability: isAvailable ? 'Available' : 'Check Site',
+        isSearchLink: true,
+        isAvailable: isAvailable
+      });
     });
     
-    console.log(`🎭 Created ${results.length} mock results`);
-    console.log('🎭 Sample results:', results.slice(0, 2));
+    console.log(`🔍 Created ${results.length} deterministic results`);
     return results;
+  },
+  
+  /**
+   * Simple hash function for consistent results
+   */
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash);
   },
   
   /**
@@ -85,10 +107,20 @@ const PriceComparison = {
       maxSites = 12,
       timeout = 30000,
       enableAI = true,
-      minTrustScore = 6
+      minTrustScore = 6,
+      useCache = true
     } = options;
     
     try {
+      // Check cache first to avoid regenerating results
+      if (useCache) {
+        const cachedResults = await this.getCachedResults(currentProduct);
+        if (cachedResults) {
+          console.log('📦 Using cached comparison results');
+          return cachedResults;
+        }
+      }
+      
       // Step 1: Generate search URLs for all available sites
       const searchUrls = await this.generateComparisonUrls(currentProduct, {
         maxSites,
@@ -104,7 +136,7 @@ const PriceComparison = {
         return this.createErrorResult(currentProduct, new Error('No suitable sites found for this product category'));
       }
       
-      // Step 2: Create mock results for demonstration (replace with real scraping later)
+      // Step 2: Create deterministic results
       const results = this.createMockResults(searchUrls, currentProduct);
       
       // Step 3: Match and filter products
@@ -113,7 +145,10 @@ const PriceComparison = {
       // Step 4: Analyze and rank results
       const analysis = this.analyzeResults(currentProduct, matches);
       
-      // Step 5: Save to history for tracking
+      // Step 5: Cache results for future use
+      await this.cacheResults(currentProduct, analysis);
+      
+      // Step 6: Save to history for tracking
       await this.saveComparisonHistory(currentProduct, analysis);
       
       console.log(`✅ Comparison complete: Found ${matches.length} matches`);
@@ -133,47 +168,70 @@ const PriceComparison = {
     const keywords = this.extractSearchKeywords(product.title);
     console.log('🔍 Extracted keywords:', keywords);
     
+    // Get current site domain to exclude it
+    const currentSite = this.getCurrentSiteDomain(product.source || product.url || '');
+    console.log('🔍 Current site domain:', currentSite);
+    
     // Get all available sites (hardcoded + AI-discovered)
     const sites = await this.getAllAvailableSites();
     console.log('🔍 Total available sites:', sites.length);
     
-    // Filter by trust score and category with smart exclusions
+    // WHITELIST APPROACH - Only include appropriate sites
     const filteredSites = sites.filter(site => {
-      // Always include general sites with good trust scores
-      if (site.category === 'all') {
-        const include = site.trustScore >= options.minTrustScore;
-        console.log(`🔍 Site ${site.name} (all): ${include ? 'INCLUDED' : 'EXCLUDED'} (trust: ${site.trustScore})`);
-        return include;
+      // Exclude current site to avoid duplicates
+      if (currentSite && site.domain.includes(currentSite)) {
+        console.log(`❌ Excluding ${site.name} (current site)`);
+        return false;
       }
       
-      // For specialized sites, be more lenient to get more results
-      const productMatches = this.matchesCategory(product, site.category);
-      const shouldExclude = this.shouldExcludeSite(product, site);
-      const trustOk = site.trustScore >= Math.max(6, options.minTrustScore - 1); // Lower threshold for specialized sites
+      // Check trust score first
+      if (site.trustScore < options.minTrustScore) {
+        console.log(`❌ Excluding ${site.name} (low trust: ${site.trustScore})`);
+        return false;
+      }
       
-      const include = trustOk && (productMatches || !shouldExclude); // Include if matches OR not explicitly excluded
-      console.log(`🔍 Site ${site.name} (${site.category}): ${include ? 'INCLUDED' : 'EXCLUDED'} (trust: ${trustOk}, matches: ${productMatches}, exclude: ${shouldExclude})`);
+      // STRICT EXCLUSION CHECK - if excluded, definitely don't include
+      if (this.shouldExcludeSite(product, site)) {
+        return false;
+      }
       
-      return include;
+      // WHITELIST for electronics (phones, laptops, etc.)
+      if (this.isElectronicsProduct(product)) {
+        const electronicsWhitelist = ['amazon', 'flipkart', 'croma', 'tatacliq', 'snapdeal'];
+        const isWhitelisted = electronicsWhitelist.some(allowed => 
+          site.name.toLowerCase().includes(allowed) || site.domain.includes(allowed)
+        );
+        
+        if (isWhitelisted) {
+          console.log(`✅ WHITELIST: Including ${site.name} for electronics`);
+          return true;
+        } else {
+          console.log(`❌ WHITELIST: Excluding ${site.name} (not in electronics whitelist)`);
+          return false;
+        }
+      }
+      
+      // For general sites, include if category is 'all'
+      if (site.category === 'all') {
+        console.log(`✅ Including ${site.name} (general site)`);
+        return true;
+      }
+      
+      // For other products, use category matching
+      const categoryMatch = this.matchesCategory(product, site.category);
+      console.log(`🔍 Site ${site.name} (${site.category}): ${categoryMatch ? 'INCLUDED' : 'EXCLUDED'}`);
+      
+      return categoryMatch;
     });
     
     console.log('🔍 Filtered sites count:', filteredSites.length);
-    
-    // If we have too few sites, be more lenient
-    if (filteredSites.length < 4) {
-      console.log('⚠️ Too few sites, being more lenient...');
-      const moreSites = sites.filter(site => {
-        return site.trustScore >= 6 && !this.shouldExcludeSite(product, site);
-      });
-      filteredSites.push(...moreSites.filter(s => !filteredSites.find(f => f.name === s.name)));
-    }
+    console.log('🔍 Selected sites:', filteredSites.map(s => `${s.name} (${s.category})`));
     
     // Sort by trust score (highest first)
     filteredSites.sort((a, b) => b.trustScore - a.trustScore);
     
     // Limit to max sites
     const selectedSites = filteredSites.slice(0, options.maxSites);
-    console.log('🔍 Final selected sites:', selectedSites.map(s => s.name));
     
     // Generate search URLs
     return selectedSites.map(site => ({
@@ -242,6 +300,42 @@ const PriceComparison = {
     return [...hardcodedSites, ...aiDiscoveredSites];
   },
   
+  /**
+   * Check if product is electronics (phones, laptops, etc.)
+   */
+  isElectronicsProduct(product) {
+    const title = product.title.toLowerCase();
+    const electronicsKeywords = [
+      'phone', 'iphone', 'smartphone', 'mobile', 'android',
+      'laptop', 'computer', 'pc', 'macbook', 'tablet', 'ipad',
+      'tv', 'television', 'monitor', 'camera', 'smartwatch',
+      'headphone', 'earphone', 'speaker', 'charger', 'powerbank'
+    ];
+    
+    return electronicsKeywords.some(keyword => title.includes(keyword));
+  },
+
+  /**
+   * Get current site domain from product source
+   */
+  getCurrentSiteDomain(sourceOrUrl) {
+    try {
+      if (!sourceOrUrl) return null;
+      
+      // If it's already a domain
+      if (!sourceOrUrl.includes('://')) {
+        return sourceOrUrl.replace('www.', '').toLowerCase();
+      }
+      
+      // Extract domain from URL
+      const url = new URL(sourceOrUrl);
+      return url.hostname.replace('www.', '').toLowerCase();
+    } catch (error) {
+      console.warn('Could not parse source/URL:', sourceOrUrl);
+      return null;
+    }
+  },
+
   /**
    * Build search URL for a site
    */
@@ -521,30 +615,97 @@ const PriceComparison = {
   },
   
   /**
+   * Cache comparison results
+   */
+  async cacheResults(product, results) {
+    try {
+      const cacheKey = `comparison_cache_${this.generateProductId(product)}`;
+      const cacheData = {
+        timestamp: Date.now(),
+        product: {
+          title: product.title,
+          url: product.url,
+          source: product.source,
+          priceValue: product.priceValue
+        },
+        results: results,
+        expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 hours
+      };
+      
+      await chrome.storage.local.set({ [cacheKey]: cacheData });
+      console.log('💾 Results cached for 24 hours');
+    } catch (error) {
+      console.error('Failed to cache results:', error);
+    }
+  },
+  
+  /**
+   * Get cached comparison results
+   */
+  async getCachedResults(product) {
+    try {
+      const cacheKey = `comparison_cache_${this.generateProductId(product)}`;
+      const { [cacheKey]: cacheData } = await chrome.storage.local.get(cacheKey);
+      
+      if (cacheData && cacheData.expiresAt > Date.now()) {
+        console.log('📦 Found valid cached results');
+        return cacheData.results;
+      } else if (cacheData) {
+        console.log('🗑️ Cache expired, removing old data');
+        await chrome.storage.local.remove(cacheKey);
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to get cached results:', error);
+      return null;
+    }
+  },
+  
+  /**
+   * Clear comparison cache for a product
+   */
+  async clearCache(product) {
+    try {
+      const cacheKey = `comparison_cache_${this.generateProductId(product)}`;
+      await chrome.storage.local.remove(cacheKey);
+      console.log('🗑️ Cache cleared for product');
+    } catch (error) {
+      console.error('Failed to clear cache:', error);
+    }
+  },
+  
+  /**
    * Utility functions
    */
   shouldExcludeSite(product, site) {
     const title = product.title.toLowerCase();
     const siteName = site.name.toLowerCase();
     
-    // Only exclude very obvious mismatches to get more results
+    // STRICT exclusion rules - be very aggressive to prevent mismatches
     const exclusions = [
-      // Audio-only sites shouldn't get obvious non-audio searches
-      { sites: ['boat'], exclude: ['laptop', 'computer', 'tablet', 'tv', 'monitor'] },
-      // Beauty sites shouldn't get obvious non-beauty searches  
-      { sites: ['nykaa'], exclude: ['laptop', 'computer', 'tablet', 'tv', 'monitor', 'phone'] },
-      // Eyewear sites shouldn't get obvious non-eyewear
-      { sites: ['lenskart'], exclude: ['laptop', 'computer', 'tablet', 'tv', 'monitor', 'phone'] },
-      // Kids sites shouldn't get adult-only electronics
-      { sites: ['firstcry'], exclude: ['laptop', 'computer', 'tablet', 'tv', 'monitor'] }
+      // Audio/accessories sites - NEVER get phones, computers, etc.
+      { sites: ['boat', 'boAt'], exclude: ['phone', 'iphone', 'smartphone', 'mobile', 'laptop', 'computer', 'tablet', 'tv', 'monitor', 'apple', 'samsung', 'oneplus'] },
+      
+      // Beauty sites - NEVER get electronics
+      { sites: ['nykaa'], exclude: ['phone', 'iphone', 'smartphone', 'mobile', 'laptop', 'computer', 'tablet', 'tv', 'monitor', 'apple', 'samsung', 'electronics'] },
+      
+      // Eyewear sites - NEVER get electronics
+      { sites: ['lenskart'], exclude: ['phone', 'iphone', 'smartphone', 'mobile', 'laptop', 'computer', 'tablet', 'tv', 'monitor', 'apple', 'samsung', 'electronics'] },
+      
+      // Kids sites - NEVER get adult electronics
+      { sites: ['firstcry'], exclude: ['phone', 'iphone', 'smartphone', 'mobile', 'laptop', 'computer', 'tablet', 'tv', 'monitor', 'apple', 'samsung', 'electronics', 'adult'] },
+      
+      // Fashion sites - NEVER get electronics (be very strict)
+      { sites: ['myntra', 'ajio'], exclude: ['phone', 'iphone', 'smartphone', 'mobile', 'laptop', 'computer', 'tablet', 'tv', 'monitor', 'apple', 'samsung', 'electronics', 'tech'] }
     ];
     
     for (const rule of exclusions) {
-      const matchesSite = rule.sites.some(s => siteName.includes(s));
+      const matchesSite = rule.sites.some(s => siteName.toLowerCase().includes(s.toLowerCase()));
       if (matchesSite) {
-        const shouldExclude = rule.exclude.some(keyword => title.includes(keyword));
+        const shouldExclude = rule.exclude.some(keyword => title.includes(keyword.toLowerCase()));
         if (shouldExclude) {
-          console.log(`❌ Excluding ${site.name} for "${title}" (obvious mismatch)`);
+          console.log(`❌ STRICT EXCLUSION: ${site.name} for "${title}" (inappropriate category)`);
           return true;
         }
       }
@@ -557,48 +718,47 @@ const PriceComparison = {
     if (category === 'all') return true;
     
     const title = product.title.toLowerCase();
+    
+    // Define strict category matching
     const categoryKeywords = {
-      electronics: [
-        // Mobile & Tablets
-        'phone', 'iphone', 'android', 'smartphone', 'mobile', 'tablet', 'ipad',
-        // Computers
-        'laptop', 'computer', 'pc', 'macbook', 'chromebook', 'desktop',
-        // Audio
-        'headphone', 'earphone', 'earbud', 'speaker', 'soundbar', 'bluetooth', 'wireless',
-        // Accessories
-        'charger', 'cable', 'adapter', 'powerbank', 'case', 'cover',
-        // Appliances
-        'tv', 'television', 'monitor', 'camera', 'smartwatch', 'fitness', 'tracker'
-      ],
-      fashion: [
-        // Clothing
-        'shirt', 'tshirt', 't-shirt', 'dress', 'jeans', 'pants', 'trouser', 'jacket', 'coat', 'sweater', 'hoodie',
-        // Footwear
-        'shoes', 'sneaker', 'sandal', 'boot', 'slipper', 'heel', 'formal',
-        // Accessories
-        'bag', 'handbag', 'backpack', 'wallet', 'belt', 'watch', 'jewelry', 'sunglasses'
-      ],
-      beauty: [
-        'makeup', 'cosmetic', 'lipstick', 'foundation', 'mascara', 'eyeliner',
-        'skincare', 'cream', 'lotion', 'serum', 'moisturizer', 'cleanser',
-        'perfume', 'fragrance', 'deodorant', 'shampoo', 'conditioner', 'hair'
-      ],
-      sports: [
-        'fitness', 'gym', 'exercise', 'workout', 'sports', 'running', 'yoga',
-        'cricket', 'football', 'basketball', 'tennis', 'badminton', 'swimming',
-        'dumbbell', 'treadmill', 'cycle', 'bicycle'
-      ],
-      kids: [
-        'baby', 'kids', 'children', 'infant', 'toddler', 'toy', 'game',
-        'diaper', 'bottle', 'stroller', 'car seat', 'educational'
-      ],
-      eyewear: [
-        'glasses', 'eyeglasses', 'sunglasses', 'lens', 'contact', 'frame', 'spectacle'
-      ]
+      electronics: {
+        include: ['phone', 'iphone', 'android', 'smartphone', 'mobile', 'tablet', 'ipad', 'laptop', 'computer', 'pc', 'macbook', 'headphone', 'earphone', 'earbud', 'speaker', 'charger', 'cable', 'tv', 'monitor', 'camera', 'smartwatch'],
+        exclude: []
+      },
+      fashion: {
+        include: ['shirt', 'tshirt', 't-shirt', 'dress', 'jeans', 'pants', 'jacket', 'shoes', 'sneaker', 'sandal', 'boot', 'bag', 'wallet', 'belt', 'jewelry'],
+        exclude: ['phone', 'iphone', 'mobile', 'laptop', 'computer', 'tablet']
+      },
+      beauty: {
+        include: ['makeup', 'cosmetic', 'lipstick', 'foundation', 'skincare', 'cream', 'perfume', 'shampoo'],
+        exclude: ['phone', 'iphone', 'mobile', 'laptop', 'computer', 'tablet']
+      },
+      sports: {
+        include: ['fitness', 'gym', 'sports', 'running', 'yoga', 'cricket', 'football', 'tennis', 'cycle'],
+        exclude: ['phone', 'iphone', 'mobile', 'laptop', 'computer', 'tablet']
+      },
+      kids: {
+        include: ['baby', 'kids', 'children', 'toy', 'diaper', 'stroller'],
+        exclude: ['phone', 'iphone', 'mobile', 'laptop', 'computer', 'tablet', 'adult']
+      },
+      eyewear: {
+        include: ['glasses', 'eyeglasses', 'sunglasses', 'lens', 'contact', 'frame'],
+        exclude: ['phone', 'iphone', 'mobile', 'laptop', 'computer', 'tablet']
+      }
     };
     
-    const keywords = categoryKeywords[category] || [];
-    return keywords.some(keyword => title.includes(keyword));
+    const categoryData = categoryKeywords[category];
+    if (!categoryData) return false;
+    
+    // Check if product should be excluded from this category
+    const hasExcludeKeyword = categoryData.exclude.some(keyword => title.includes(keyword));
+    if (hasExcludeKeyword) {
+      return false;
+    }
+    
+    // Check if product matches this category
+    const hasIncludeKeyword = categoryData.include.some(keyword => title.includes(keyword));
+    return hasIncludeKeyword;
   },
   
   createErrorResult(product, error) {

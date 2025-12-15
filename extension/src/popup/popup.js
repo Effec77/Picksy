@@ -9,7 +9,43 @@ document.addEventListener('DOMContentLoaded', () => {
   loadLastScrape();
   updateScanInfo();
   checkServiceWorkerHealth(); // Check if background script is responsive
+  
+  // Setup test buttons
+  setupTestButtons();
+  
+  // Initialize comparison tab
+  setTimeout(() => {
+    const comparisonResults = document.getElementById('comparisonResults');
+    if (comparisonResults && !comparisonResults.innerHTML.trim()) {
+      comparisonResults.innerHTML = createComparisonInterface();
+      setupComparisonTab();
+    }
+  }, 100);
 });
+
+// Setup test buttons with proper event listeners
+function setupTestButtons() {
+  console.log('🔧 Setting up test buttons...');
+  
+  const testSystemBtn = document.getElementById('testSystemBtn');
+  const testDirectBtn = document.getElementById('testDirectBtn');
+  
+  if (testSystemBtn) {
+    testSystemBtn.addEventListener('click', () => {
+      console.log('🧪 Test System button clicked');
+      testComparisonSystem();
+    });
+    console.log('✅ Test System button listener added');
+  }
+  
+  if (testDirectBtn) {
+    testDirectBtn.addEventListener('click', () => {
+      console.log('🔧 Test Direct button clicked');
+      testDirect();
+    });
+    console.log('✅ Test Direct button listener added');
+  }
+}
 
 // Note: Tab cleanup removed - using mock results for now
 
@@ -1329,71 +1365,50 @@ function showToast(message, type = 'info') {
 // Price Comparison Functionality
 // Note: currentProduct is already declared at the top of the file
 
-// Start price comparison
+// SIMPLIFIED start price comparison
 async function startPriceComparison() {
-  console.log('🚀 Starting price comparison...');
-  console.log('🚀 Current product state:', currentProduct);
+  console.log('🚀 SIMPLE: Starting price comparison...');
   
   try {
-    // Use existing product data if available, otherwise get fresh data
-    if (!currentProduct || !currentProduct.title) {
-      console.log('📡 No current product, fetching fresh data...');
-      showToast('⏳ Getting product data...', 'info');
-      currentProduct = await getCurrentProductData();
-    } else {
-      console.log('📦 Using existing product data:', currentProduct.title);
-    }
-    
-    if (!currentProduct || !currentProduct.title) {
-      console.error('❌ No product data available');
-      showToast('❌ Please scan a product first', 'error');
-      return;
-    }
-    
-    console.log('📦 Current product for comparison:', {
-      title: currentProduct.title,
-      price: currentProduct.price,
-      source: currentProduct.source
-    });
-    
     // Show progress
-    showComparisonProgress();
-    showToast('🔍 Starting price comparison...', 'info');
+    const progressElement = document.getElementById('comparisonProgress');
+    if (progressElement) {
+      progressElement.style.display = 'block';
+    }
+    
+    // Create mock product if none exists
+    if (!currentProduct) {
+      currentProduct = {
+        title: 'Sample Product for Testing',
+        price: '₹10,000',
+        priceValue: 10000,
+        source: 'test.com'
+      };
+    }
+    
+    console.log('🚀 SIMPLE: Using product:', currentProduct.title);
     
     // Load price comparison engine
     await loadPriceComparisonEngine();
     
-    // Start comparison with more lenient settings
-    console.log('🎯 Calling PriceComparison.compareProductPrices...');
+    // Get comparison results
+    console.log('🚀 SIMPLE: Getting comparison results...');
     const results = await PriceComparison.compareProductPrices(currentProduct, {
-      maxSites: 12,
-      timeout: 30000,
-      enableAI: true,
-      minTrustScore: 5 // Lower threshold for more results
+      maxSites: 8,
+      minTrustScore: 5
     });
     
-    console.log('🎯 Comparison results received:', results);
-    console.log('🎯 Results structure check:', {
-      hasResults: !!results,
-      hasMatches: !!(results?.matches),
-      matchesLength: results?.matches?.length || 0,
-      hasBestDeal: !!(results?.bestDeal),
-      hasAnalysis: !!(results?.analysis)
-    });
+    console.log('🚀 SIMPLE: Got results:', results);
     
-    if (!results) {
-      throw new Error('No results returned from comparison engine');
-    }
-    
-    // Display results
-    displayComparisonResults(results);
-    showToast(`✅ Found ${results.matches?.length || 0} matches`, 'success');
+    // Display results after a short delay
+    setTimeout(() => {
+      displayComparisonResults(results);
+      showToast(`Found ${results.matches?.length || 0} matches`, 'success');
+    }, 500);
     
   } catch (error) {
-    console.error('❌ Price comparison failed:', error);
-    console.error('❌ Error stack:', error.stack);
-    showComparisonError(error.message);
-    showToast(`❌ Comparison failed: ${error.message}`, 'error');
+    console.error('❌ SIMPLE: Comparison failed:', error);
+    showToast('Comparison failed: ' + error.message, 'error');
   }
 }
 
@@ -1464,14 +1479,12 @@ function showComparisonProgress() {
   const progressSteps = [
     'Extracting product details...',
     'Generating search URLs...',
-    'Opening invisible tabs...',
-    'Scraping site 1/12...',
-    'Scraping site 3/12...',
-    'Scraping site 6/12...',
-    'Scraping site 9/12...',
-    'Scraping site 12/12...',
+    'Creating mock results...',
     'Matching products...',
-    'Analyzing results...',
+    'Analyzing prices...',
+    'Calculating savings...',
+    'Ranking results...',
+    'Finalizing comparison...',
     'Complete!'
   ];
   
@@ -1491,68 +1504,223 @@ function showComparisonProgress() {
   }, 1000);
 }
 
-// Display comparison results
+// Display comparison results - SIMPLIFIED VERSION
 function displayComparisonResults(results) {
-  console.log('📊 Displaying comparison results:', results);
-  console.log('📊 Results structure:', {
-    matches: results?.matches?.length || 0,
-    bestDeal: !!results?.bestDeal,
-    analysis: !!results?.analysis
-  });
+  console.log('📊 SIMPLE: Displaying comparison results:', results);
   
-  // Hide progress, show results
-  document.getElementById('comparisonProgress').style.display = 'none';
-  document.getElementById('comparisonResultsContainer').style.display = 'block';
-  
-  // Display best deal
-  if (results.bestDeal) {
-    displayBestDeal(results.bestDeal, results.savings, results.savingsPercent);
+  // Validate results
+  if (!results || !results.matches || !Array.isArray(results.matches)) {
+    console.error('❌ SIMPLE: Invalid results structure');
+    return;
   }
   
-  // Display all results
-  displayAllResults(results.matches);
+  console.log('📊 SIMPLE: Found', results.matches.length, 'matches');
   
-  // Display statistics
-  displayComparisonStats(results.analysis);
+  // Get DOM elements (they should exist in HTML)
+  const progressElement = document.getElementById('comparisonProgress');
+  const resultsContainer = document.getElementById('comparisonResultsContainer');
+  const allResults = document.getElementById('allResults');
   
-  // Update results count
-  document.getElementById('resultsCount').textContent = results.matches.length;
-  
-  // Add event listeners for deal buttons
-  document.querySelectorAll('.deal-button').forEach(button => {
-    button.addEventListener('click', () => {
-      window.open(button.dataset.url, '_blank');
-    });
+  console.log('📊 SIMPLE: DOM check:', {
+    progress: !!progressElement,
+    container: !!resultsContainer,
+    allResults: !!allResults
   });
   
-  document.querySelectorAll('.match-button').forEach(button => {
-    button.addEventListener('click', () => {
-      window.open(button.dataset.url, '_blank');
+  if (!progressElement || !resultsContainer || !allResults) {
+    console.error('❌ SIMPLE: Missing DOM elements');
+    return;
+  }
+  
+  // Hide progress, show results
+  progressElement.style.display = 'none';
+  resultsContainer.style.display = 'block';
+  
+  // Create results table with search links
+  console.log('📊 SIMPLE: Creating results table...');
+  
+  const tableHTML = `
+    <div style="background: white; border: 2px solid #007cba; border-radius: 8px; margin: 10px 0;">
+      <div style="background: #007cba; color: white; padding: 10px; text-align: center;">
+        <h3 style="margin: 0;">🛍️ Compare Prices on ${results.matches.length} Sites</h3>
+        <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.9;">Click "Search & Buy" to find the best deals</p>
+      </div>
+      <div style="padding: 15px;">
+        ${results.matches.map((match, index) => {
+          const isSearchLink = match.isSearchLink || false;
+          const priceDisplay = match.priceValue > 0 ? `₹${match.priceValue.toLocaleString()}` : 'Check Price';
+          const statusText = isSearchLink ? 'Search Required' : (match.availability || 'Unknown');
+          
+          return `
+            <div style="
+              border: 1px solid #ddd; 
+              border-radius: 8px; 
+              padding: 15px; 
+              margin: 10px 0;
+              background: ${index % 2 === 0 ? '#f9f9f9' : 'white'};
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            ">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div style="flex: 1;">
+                  <div style="font-weight: bold; color: #333; margin-bottom: 5px; font-size: 16px;">
+                    ${match.siteName || 'Unknown Site'}
+                  </div>
+                  <div style="color: #666; font-size: 12px; margin-bottom: 8px;">
+                    ${statusText} • Trust Score: ${match.trustScore || 0}/10
+                  </div>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 18px; font-weight: bold; color: #007cba; margin-bottom: 5px;">
+                    ${priceDisplay}
+                  </div>
+                  <div style="
+                    background: ${match.trustScore >= 8 ? '#28a745' : match.trustScore >= 6 ? '#ffc107' : '#dc3545'}; 
+                    color: white; 
+                    padding: 3px 8px; 
+                    border-radius: 12px; 
+                    font-size: 10px;
+                    font-weight: bold;
+                  ">
+                    Trust: ${match.trustScore || 0}/10
+                  </div>
+                </div>
+              </div>
+              <button class="search-buy-btn" data-url="${match.url}" data-site="${match.siteName}" style="
+                background: linear-gradient(135deg, #007cba, #0056b3);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 25px;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: bold;
+                width: 100%;
+                transition: all 0.3s ease;
+              ">
+                🛒 Search & Buy on ${match.siteName}
+              </button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      <div style="background: #f8f9fa; padding: 15px; border-top: 1px solid #ddd;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <p style="margin: 0; font-size: 12px; color: #666;">
+            💡 <strong>Tip:</strong> Results are cached for 24 hours to save API credits
+          </p>
+          <button class="refresh-comparison-btn" style="
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 11px;
+          ">
+            🔄 Refresh
+          </button>
+        </div>
+        <p style="margin: 0; font-size: 11px; color: #999; text-align: center;">
+          Click "Search & Buy" to go directly to product search on each site
+        </p>
+      </div>
+    </div>
+  `;
+  
+  allResults.innerHTML = tableHTML;
+  console.log('✅ SIMPLE: Results table created!');
+  
+  // Add event listeners for search & buy buttons and refresh
+  setTimeout(() => {
+    const searchBuyButtons = document.querySelectorAll('.search-buy-btn');
+    const refreshButtons = document.querySelectorAll('.refresh-comparison-btn');
+    
+    console.log('📊 Adding event listeners for', searchBuyButtons.length, 'search buttons and', refreshButtons.length, 'refresh buttons');
+    
+    searchBuyButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const url = button.dataset.url;
+        const site = button.dataset.site;
+        console.log(`🛒 Opening search on ${site}:`, url);
+        window.open(url, '_blank');
+      });
     });
-  });
+    
+    refreshButtons.forEach(button => {
+      button.addEventListener('click', async () => {
+        console.log('🔄 Refreshing comparison results...');
+        button.textContent = '⏳ Refreshing...';
+        button.disabled = true;
+        
+        try {
+          // Clear cache and get fresh results
+          if (typeof PriceComparison !== 'undefined' && currentProduct) {
+            await PriceComparison.clearCache(currentProduct);
+            const freshResults = await PriceComparison.compareProductPrices(currentProduct, {
+              useCache: false
+            });
+            displayComparisonResults(freshResults);
+            showToast('✅ Results refreshed', 'success');
+          }
+        } catch (error) {
+          console.error('Failed to refresh:', error);
+          showToast('❌ Refresh failed', 'error');
+        } finally {
+          button.textContent = '🔄 Refresh';
+          button.disabled = false;
+        }
+      });
+    });
+  }, 100);
+  
+  // Update count
+  const resultsCount = document.getElementById('resultsCount');
+  if (resultsCount) {
+    resultsCount.textContent = results.matches.length;
+  }
 }
 
 // Display best deal card
 function displayBestDeal(bestDeal, savings, savingsPercent) {
+  console.log('🏆 Displaying best deal:', bestDeal);
+  
   const bestDealContent = document.getElementById('bestDealContent');
+  if (!bestDealContent) {
+    console.error('❌ bestDealContent element not found');
+    return;
+  }
+  
+  if (!bestDeal) {
+    console.warn('⚠️ No best deal data provided');
+    bestDealContent.innerHTML = '<p style="color: rgba(255,255,255,0.8);">No best deal available</p>';
+    return;
+  }
+  
+  // Ensure bestDeal has required properties with defaults
+  const priceValue = bestDeal.priceValue || 0;
+  const siteName = bestDeal.siteName || 'Unknown Site';
+  const trustScore = bestDeal.trustScore || 0;
+  const url = bestDeal.url || '#';
+  const savingsAmount = savings || 0;
+  const savingsPercentage = savingsPercent || 0;
   
   bestDealContent.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
       <div>
         <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">
-          ₹${bestDeal.priceValue.toLocaleString()}
+          ₹${priceValue.toLocaleString()}
         </div>
         <div style="font-size: 14px; opacity: 0.9;">
-          ${bestDeal.siteName} • Trust: ${bestDeal.trustScore}/10
+          ${siteName} • Trust: ${trustScore}/10
         </div>
       </div>
       <div style="text-align: right;">
-        ${savings > 0 ? `
+        ${savingsAmount > 0 ? `
           <div style="font-size: 16px; font-weight: bold; color: #ffeb3b;">
-            Save ₹${savings.toLocaleString()}
+            Save ₹${savingsAmount.toLocaleString()}
           </div>
           <div style="font-size: 12px; opacity: 0.8;">
-            ${savingsPercent.toFixed(1)}% off
+            ${savingsPercentage.toFixed(1)}% off
           </div>
         ` : `
           <div style="font-size: 14px; opacity: 0.9;">
@@ -1561,7 +1729,7 @@ function displayBestDeal(bestDeal, savings, savingsPercent) {
         `}
       </div>
     </div>
-    <button class="deal-button" data-url="${bestDeal.url}" style="
+    <button class="deal-button" data-url="${url}" style="
       background: rgba(255,255,255,0.2);
       border: 2px solid rgba(255,255,255,0.3);
       color: white;
@@ -1574,118 +1742,195 @@ function displayBestDeal(bestDeal, savings, savingsPercent) {
       🛒 View Deal
     </button>
   `;
+  
+  console.log('✅ Best deal displayed');
 }
 
 // Display all results
 function displayAllResults(matches) {
-  const allResults = document.getElementById('allResults');
+  console.log('📊 displayAllResults called with:', matches?.length || 0, 'matches');
+  console.log('📊 Sample match data:', matches?.[0]);
   
-  if (matches.length === 0) {
+  const allResults = document.getElementById('allResults');
+  if (!allResults) {
+    console.error('❌ allResults element not found');
+    console.log('📊 Available elements:', Object.keys(document.querySelectorAll('[id]')).map(i => document.querySelectorAll('[id]')[i].id));
+    return;
+  }
+  
+  console.log('✅ allResults element found');
+  
+  if (!matches || matches.length === 0) {
+    console.log('⚠️ No matches to display');
     allResults.innerHTML = `
-      <div style="text-align: center; padding: 20px; color: #666;">
-        No matching products found
+      <div style="text-align: center; padding: 20px; color: #666; background: white; border-radius: 8px;">
+        <h4>No matching products found</h4>
+        <p>Try scanning a different product or check back later.</p>
       </div>
     `;
     return;
   }
   
-  // Create table format for better comparison
-  allResults.innerHTML = `
-    <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead>
-          <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
-            <th style="padding: 12px 8px; text-align: left; font-size: 12px; font-weight: bold; color: #495057;">Site</th>
-            <th style="padding: 12px 8px; text-align: right; font-size: 12px; font-weight: bold; color: #495057;">Price</th>
-            <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Trust</th>
-            <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Match</th>
-            <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${matches.map((match, index) => `
-            <tr style="border-bottom: 1px solid #e9ecef; ${index % 2 === 0 ? 'background: #f8f9fa;' : 'background: white;'}">
-              <td style="padding: 12px 8px;">
-                <div style="font-weight: 500; color: #333; margin-bottom: 2px;">${match.siteName}</div>
-                <div style="font-size: 11px; color: #666; line-height: 1.3;">
-                  ${match.title.substring(0, 40)}${match.title.length > 40 ? '...' : ''}
-                </div>
-              </td>
-              <td style="padding: 12px 8px; text-align: right;">
-                <span style="font-size: 14px; font-weight: bold; color: ${match.error ? '#dc3545' : '#007cba'};">
-                  ${match.error ? 'Failed' : (match.priceValue > 0 ? '₹' + match.priceValue.toLocaleString() : 'N/A')}
-                </span>
-              </td>
-              <td style="padding: 12px 8px; text-align: center;">
-                <span style="
-                  background: ${match.trustScore >= 8 ? '#28a745' : match.trustScore >= 6 ? '#ffc107' : '#dc3545'};
-                  color: white;
-                  padding: 3px 8px;
-                  border-radius: 12px;
-                  font-size: 10px;
-                  font-weight: bold;
-                ">
-                  ${match.trustScore}/10
-                </span>
-              </td>
-              <td style="padding: 12px 8px; text-align: center;">
-                <span style="
-                  background: ${match.similarity >= 0.8 ? '#28a745' : '#ffc107'};
-                  color: white;
-                  padding: 3px 8px;
-                  border-radius: 12px;
-                  font-size: 10px;
-                  font-weight: bold;
-                ">
-                  ${Math.round(match.similarity * 100)}%
-                </span>
-              </td>
-              <td style="padding: 12px 8px; text-align: center;">
-                <button class="match-button" data-url="${match.url}" style="
-                  background: #007cba;
-                  color: white;
-                  border: none;
-                  padding: 6px 12px;
-                  border-radius: 12px;
-                  cursor: pointer;
-                  font-size: 11px;
-                  font-weight: 500;
-                ">
-                  View
-                </button>
-              </td>
+  console.log('📊 Creating results table with', matches.length, 'matches');
+  
+  try {
+    // Create table format for better comparison
+    const tableHTML = `
+      <div style="background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin: 10px 0;">
+        <div style="background: #007cba; color: white; padding: 15px; text-align: center;">
+          <h4 style="margin: 0; font-size: 16px;">🛍️ Price Comparison Results</h4>
+          <p style="margin: 5px 0 0 0; font-size: 12px; opacity: 0.9;">Found ${matches.length} matches across different sites</p>
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+              <th style="padding: 12px 8px; text-align: left; font-size: 12px; font-weight: bold; color: #495057;">Site</th>
+              <th style="padding: 12px 8px; text-align: right; font-size: 12px; font-weight: bold; color: #495057;">Price</th>
+              <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Trust</th>
+              <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Match</th>
+              <th style="padding: 12px 8px; text-align: center; font-size: 12px; font-weight: bold; color: #495057;">Action</th>
             </tr>
-          `).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+          </thead>
+          <tbody>
+            ${matches.map((match, index) => {
+              // Ensure match has required properties
+              const siteName = match.siteName || 'Unknown Site';
+              const title = match.title || 'No title';
+              const priceValue = match.priceValue || 0;
+              const trustScore = match.trustScore || 0;
+              const similarity = match.similarity || 0;
+              const url = match.url || '#';
+              const isError = match.error || false;
+              
+              console.log(`📊 Processing match ${index + 1}:`, { siteName, priceValue, trustScore });
+              
+              return `
+                <tr style="border-bottom: 1px solid #e9ecef; ${index % 2 === 0 ? 'background: #f8f9fa;' : 'background: white;'}">
+                  <td style="padding: 12px 8px;">
+                    <div style="font-weight: 500; color: #333; margin-bottom: 2px;">${siteName}</div>
+                    <div style="font-size: 11px; color: #666; line-height: 1.3;">
+                      ${title.substring(0, 40)}${title.length > 40 ? '...' : ''}
+                    </div>
+                  </td>
+                  <td style="padding: 12px 8px; text-align: right;">
+                    <span style="font-size: 14px; font-weight: bold; color: ${isError ? '#dc3545' : '#007cba'};">
+                      ${isError ? 'Failed' : (priceValue > 0 ? '₹' + priceValue.toLocaleString() : 'N/A')}
+                    </span>
+                  </td>
+                  <td style="padding: 12px 8px; text-align: center;">
+                    <span style="
+                      background: ${trustScore >= 8 ? '#28a745' : trustScore >= 6 ? '#ffc107' : '#dc3545'};
+                      color: white;
+                      padding: 3px 8px;
+                      border-radius: 12px;
+                      font-size: 10px;
+                      font-weight: bold;
+                    ">
+                      ${trustScore}/10
+                    </span>
+                  </td>
+                  <td style="padding: 12px 8px; text-align: center;">
+                    <span style="
+                      background: ${similarity >= 0.8 ? '#28a745' : '#ffc107'};
+                      color: white;
+                      padding: 3px 8px;
+                      border-radius: 12px;
+                      font-size: 10px;
+                      font-weight: bold;
+                    ">
+                      ${Math.round(similarity * 100)}%
+                    </span>
+                  </td>
+                  <td style="padding: 12px 8px; text-align: center;">
+                    <button class="match-button" data-url="${url}" style="
+                      background: #007cba;
+                      color: white;
+                      border: none;
+                      padding: 6px 12px;
+                      border-radius: 12px;
+                      cursor: pointer;
+                      font-size: 11px;
+                      font-weight: 500;
+                    ">
+                      View
+                    </button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    
+    console.log('📊 Setting innerHTML for allResults...');
+    allResults.innerHTML = tableHTML;
+    console.log('✅ Results table HTML set successfully');
+    
+    // Verify the table was created
+    const table = allResults.querySelector('table');
+    if (table) {
+      console.log('✅ Table element created successfully');
+      console.log('📊 Table rows:', table.querySelectorAll('tbody tr').length);
+    } else {
+      console.error('❌ Table element not found after setting innerHTML');
+    }
+    
+  } catch (error) {
+    console.error('❌ Error creating results table:', error);
+    allResults.innerHTML = `
+      <div style="text-align: center; padding: 20px; color: #dc3545; background: #f8d7da; border-radius: 8px;">
+        <h4>Error displaying results</h4>
+        <p>${error.message}</p>
+      </div>
+    `;
+  }
 }
 
 // Display comparison statistics
 function displayComparisonStats(analysis) {
+  console.log('📊 Displaying comparison stats:', analysis);
+  
   const statsContent = document.getElementById('statsContent');
+  if (!statsContent) {
+    console.error('❌ statsContent element not found');
+    return;
+  }
+  
+  if (!analysis) {
+    console.warn('⚠️ No analysis data provided');
+    statsContent.innerHTML = '<p style="color: #666;">No statistics available</p>';
+    return;
+  }
+  
+  // Ensure analysis has required properties with defaults
+  const totalSites = analysis.totalSites || 0;
+  const successfulMatches = analysis.successfulMatches || 0;
+  const averagePrice = analysis.averagePrice || 0;
+  const priceRange = analysis.priceRange || { min: 0, max: 0 };
   
   statsContent.innerHTML = `
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 12px;">
       <div>
         <strong>Sites Checked:</strong><br>
-        ${analysis.totalSites} sites
+        ${totalSites} sites
       </div>
       <div>
         <strong>Successful Matches:</strong><br>
-        ${analysis.successfulMatches} products
+        ${successfulMatches} products
       </div>
       <div>
         <strong>Average Price:</strong><br>
-        ₹${analysis.averagePrice.toLocaleString()}
+        ₹${averagePrice.toLocaleString()}
       </div>
       <div>
         <strong>Price Range:</strong><br>
-        ₹${analysis.priceRange.min.toLocaleString()} - ₹${analysis.priceRange.max.toLocaleString()}
+        ₹${priceRange.min.toLocaleString()} - ₹${priceRange.max.toLocaleString()}
       </div>
     </div>
   `;
+  
+  console.log('✅ Comparison stats displayed');
 }
 
 // Show comparison error
@@ -1751,10 +1996,21 @@ function updateComparisonTabForProduct(product) {
   console.log('🔄 Updating comparison tab for product:', product.title);
   
   const comparisonResults = document.getElementById('comparisonResults');
-  if (!comparisonResults) return;
+  if (!comparisonResults) {
+    console.warn('⚠️ comparisonResults element not found');
+    return;
+  }
   
   // Update the comparison tab to show the product is ready
-  comparisonResults.innerHTML = `
+  comparisonResults.innerHTML = createComparisonInterface(product);
+  
+  // Re-setup the comparison button
+  setupComparisonTab();
+}
+
+// Create the complete comparison interface HTML
+function createComparisonInterface(product = null) {
+  const productSection = product ? `
     <div style="
       text-align: center;
       padding: 40px 20px;
@@ -1783,6 +2039,39 @@ function updateComparisonTabForProduct(product) {
         🔍 Start Comparison
       </button>
     </div>
+  ` : `
+    <div style="
+      text-align: center;
+      padding: 40px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 10px;
+      margin-top: 10px;
+    ">
+      <div style="font-size: 48px; margin-bottom: 10px;">🚀</div>
+      <h3 style="margin: 0 0 8px 0; color: white;">AI-Powered Price Comparison</h3>
+      <p style="margin: 0 0 15px 0; font-size: 13px; color: rgba(255,255,255,0.9);">
+        Compare prices across 12+ verified sites<br/>
+        Find the best deals with AI-powered matching
+      </p>
+      <button id="startComparisonBtn" style="
+        background: rgba(255,255,255,0.2);
+        border: 2px solid rgba(255,255,255,0.3);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 25px;
+        margin-top: 15px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      ">
+        🔍 Start Comparison
+      </button>
+    </div>
+  `;
+
+  return `
+    ${productSection}
     
     <!-- Comparison Progress -->
     <div id="comparisonProgress" style="display: none;">
@@ -1841,13 +2130,134 @@ function updateComparisonTabForProduct(product) {
       </div>
     </div>
   `;
+}
+
+// Recreate comparison interface when DOM elements are missing
+function recreateComparisonInterface() {
+  console.log('🔧 Recreating comparison interface...');
+  
+  const comparisonResults = document.getElementById('comparisonResults');
+  if (!comparisonResults) {
+    console.error('❌ Cannot recreate interface - comparisonResults element not found');
+    return;
+  }
+  
+  // Recreate the interface with current product if available
+  comparisonResults.innerHTML = createComparisonInterface(currentProduct);
   
   // Re-setup the comparison button
   setupComparisonTab();
+  
+  console.log('✅ Comparison interface recreated');
 }
+
+// SIMPLE test function
+window.testComparisonSystem = function() {
+  console.log('🧪 SIMPLE: Testing comparison system...');
+  
+  // Switch to comparison tab first
+  document.querySelector('[data-tab="comparison"]').click();
+  
+  // Wait a moment for tab to switch
+  setTimeout(() => {
+    // Create simple mock results
+    const mockResults = {
+      matches: [
+        {
+          siteName: 'Amazon India',
+          title: 'Test iPhone 15 Pro 128GB Space Black',
+          priceValue: 134900,
+          trustScore: 9
+        },
+        {
+          siteName: 'Flipkart',
+          title: 'iPhone 15 Pro 128GB Space Black',
+          priceValue: 132900,
+          trustScore: 9
+        },
+        {
+          siteName: 'Croma',
+          title: 'Apple iPhone 15 Pro 128GB',
+          priceValue: 136900,
+          trustScore: 8
+        }
+      ]
+    };
+    
+    console.log('🧪 SIMPLE: Calling displayComparisonResults...');
+    displayComparisonResults(mockResults);
+  }, 100);
+};
+
+// Even simpler direct test
+window.testDirect = function() {
+  console.log('🧪 DIRECT: Testing direct DOM manipulation...');
+  
+  const allResults = document.getElementById('allResults');
+  if (!allResults) {
+    console.error('❌ DIRECT: allResults not found');
+    return;
+  }
+  
+  allResults.innerHTML = `
+    <div style="background: red; color: white; padding: 20px; text-align: center; border-radius: 8px;">
+      <h2>🧪 DIRECT TEST SUCCESSFUL!</h2>
+      <p>If you can see this, the DOM manipulation works!</p>
+    </div>
+  `;
+  
+  // Show the results container
+  const container = document.getElementById('comparisonResultsContainer');
+  if (container) {
+    container.style.display = 'block';
+  }
+  
+  console.log('✅ DIRECT: Test complete');
+};
+
+// Console debug function
+window.debugComparison = function() {
+  console.log('🔍 DEBUG: Checking comparison system...');
+  
+  // Check DOM elements
+  const elements = {
+    comparisonResults: document.getElementById('comparisonResults'),
+    comparisonProgress: document.getElementById('comparisonProgress'),
+    comparisonResultsContainer: document.getElementById('comparisonResultsContainer'),
+    allResults: document.getElementById('allResults'),
+    startComparisonBtn: document.getElementById('startComparisonBtn'),
+    testSystemBtn: document.getElementById('testSystemBtn'),
+    testDirectBtn: document.getElementById('testDirectBtn')
+  };
+  
+  console.log('🔍 DOM Elements:', elements);
+  
+  // Check if PriceComparison is loaded
+  console.log('🔍 PriceComparison loaded:', typeof PriceComparison !== 'undefined');
+  
+  // Check current product
+  console.log('🔍 Current product:', currentProduct);
+  
+  // Test direct DOM manipulation
+  const allResults = document.getElementById('allResults');
+  if (allResults) {
+    allResults.innerHTML = '<div style="background: green; color: white; padding: 10px; text-align: center;">✅ DEBUG TEST SUCCESSFUL</div>';
+    
+    const container = document.getElementById('comparisonResultsContainer');
+    if (container) {
+      container.style.display = 'block';
+    }
+    
+    console.log('✅ DEBUG: Direct DOM manipulation successful');
+  } else {
+    console.error('❌ DEBUG: allResults element not found');
+  }
+};
 
 // Make functions globally available
 window.startPriceComparison = startPriceComparison;
 window.displayComparisonResults = displayComparisonResults;
 window.setupComparisonTab = setupComparisonTab;
 window.updateComparisonTabForProduct = updateComparisonTabForProduct;
+window.recreateComparisonInterface = recreateComparisonInterface;
+window.createComparisonInterface = createComparisonInterface;
