@@ -1,1 +1,0 @@
-# Picksy Documentation
