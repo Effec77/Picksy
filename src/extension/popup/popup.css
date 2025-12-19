@@ -1,0 +1,353 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #333;
+    background: #fff;
+    width: 380px;
+    min-height: 500px;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-height: 600px;
+}
+
+/* Header */
+.header {
+    display: flex;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #e1e5e9;
+    background: #f8f9fa;
+}
+
+.logo {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+/* Main content */
+.main {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+/* Product detection */
+.product-detection {
+    margin-bottom: 20px;
+}
+
+.product-info {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid #e1e5e9;
+    border-radius: 8px;
+    background: #f8f9fa;
+}
+
+.product-image {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 4px;
+    background: #e9ecef;
+}
+
+.product-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.product-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.price-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.current-price {
+    font-size: 16px;
+    font-weight: 600;
+    color: #27ae60;
+}
+
+.availability {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 12px;
+    background: #d4edda;
+    color: #155724;
+}
+
+.availability.out-of-stock {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.trust-indicator {
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.trust-score {
+    padding: 2px 6px;
+    border-radius: 12px;
+    background: #e2e3e5;
+}
+
+.trust-score.high {
+    background: #d4edda;
+    color: #155724;
+}
+
+.trust-score.medium {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.trust-score.low {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.no-product {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+}
+
+.supported-sites {
+    font-size: 12px;
+    margin-top: 8px;
+    color: #adb5bd;
+}
+
+/* Action buttons */
+.actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #0056b3;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: #545b62;
+}
+
+.btn-text {
+    background: none;
+    color: #007bff;
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+.btn-text:hover {
+    background: #f8f9fa;
+}
+
+/* Tracked products */
+.tracked-products h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: #2c3e50;
+}
+
+.tracked-list {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+}
+
+.hint {
+    font-size: 12px;
+    margin-top: 4px;
+    color: #adb5bd;
+}
+
+.tracked-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    background: white;
+}
+
+.tracked-item:hover {
+    background: #f8f9fa;
+}
+
+.tracked-item img {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    border-radius: 4px;
+}
+
+.tracked-item-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.tracked-item-title {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tracked-item-price {
+    font-size: 12px;
+    color: #27ae60;
+    font-weight: 500;
+}
+
+.tracked-item-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.btn-small {
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+}
+
+/* Price comparison */
+.price-comparison h3 {
+    font-size: 16px;
+    margin-bottom: 12px;
+    color: #2c3e50;
+}
+
+.comparison-results {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.comparison-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    background: white;
+}
+
+.comparison-retailer {
+    font-weight: 500;
+}
+
+.comparison-price {
+    font-weight: 600;
+    color: #27ae60;
+}
+
+.comparison-price.best {
+    color: #dc3545;
+    background: #fff5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Footer */
+.footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-top: 1px solid #e1e5e9;
+    background: #f8f9fa;
+}
+
+/* Loading states */
+.loading {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive adjustments */
+@media (max-height: 500px) {
+    .tracked-list {
+        max-height: 120px;
+    }
+}

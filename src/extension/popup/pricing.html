@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picksy - Subscription Plans</title>
+    <link rel="stylesheet" href="popup.css">
+    <style>
+        .pricing-container {
+            width: 400px;
+            max-height: 600px;
+            overflow-y: auto;
+            padding: 16px;
+        }
+        
+        .pricing-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .pricing-header h2 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 20px;
+        }
+        
+        .pricing-header p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .tier-card {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        
+        .tier-card:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 8px rgba(0, 123, 255, 0.1);
+        }
+        
+        .tier-card.current {
+            border-color: #28a745;
+            background-color: #f8fff9;
+        }
+        
+        .tier-card.popular {
+            border-color: #007bff;
+            background-color: #f8f9ff;
+        }
+        
+        .popular-badge {
+            position: absolute;
+            top: -8px;
+            right: 16px;
+            background: #007bff;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .current-badge {
+            position: absolute;
+            top: -8px;
+            right: 16px;
+            background: #28a745;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .tier-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .tier-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .tier-price {
+            font-size: 16px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .tier-description {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        
+        .tier-features {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 16px 0;
+        }
+        
+        .tier-features li {
+            padding: 4px 0;
+            font-size: 13px;
+            color: #555;
+            position: relative;
+            padding-left: 20px;
+        }
+        
+        .tier-features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .tier-button {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .tier-button.primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .tier-button.primary:hover {
+            background: #0056b3;
+        }
+        
+        .tier-button.secondary {
+            background: #f8f9fa;
+            color: #6c757d;
+            border: 1px solid #dee2e6;
+        }
+        
+        .tier-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .usage-section {
+            margin-top: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .usage-header {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            color: #333;
+        }
+        
+        .usage-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        .usage-bar {
+            width: 100px;
+            height: 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .usage-fill {
+            height: 100%;
+            background: #28a745;
+            transition: width 0.3s ease;
+        }
+        
+        .usage-fill.warning {
+            background: #ffc107;
+        }
+        
+        .usage-fill.danger {
+            background: #dc3545;
+        }
+        
+        .back-button {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 20px;
+            color: #dc3545;
+            background: #f8d7da;
+            border-radius: 6px;
+            margin: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="pricing-container">
+        <button class="back-button" id="backButton">←</button>
+        
+        <div class="pricing-header">
+            <h2>Choose Your Plan</h2>
+            <p>Upgrade for more features and higher limits</p>
+        </div>
+        
+        <div id="loadingState" class="loading">
+            Loading subscription plans...
+        </div>
+        
+        <div id="errorState" class="error" style="display: none;">
+            Failed to load subscription plans. Please try again.
+        </div>
+        
+        <div id="pricingContent" style="display: none;">
+            <div id="tiersList"></div>
+            
+            <div id="usageSection" class="usage-section" style="display: none;">
+                <div class="usage-header">Your Current Usage</div>
+                <div id="usageStats"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="pricing.js"></script>
+</body>
+</html>

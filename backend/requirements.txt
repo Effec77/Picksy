@@ -1,0 +1,16 @@
+flask
+flask-cors
+requests
+beautifulsoup4
+textblob
+praw
+yt-dlp
+duckduckgo-search
+chromadb
+groq
+python-dotenv
+xlsxwriter
+scikit-learn
+numpy
+openpyxl
+pandas

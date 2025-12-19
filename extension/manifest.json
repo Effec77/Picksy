@@ -1,32 +1,52 @@
 {
-    "manifest_version": 3,
-    "name": "Picksy",
-    "description": "Cross-site shopping assistant: extract product info, compare, and recommend with trust signals.",
-    "version": "0.1.0",
-    "action": {
-      "default_title": "Picksy",
-      "default_popup": "src/popup/popup.html"
-    },
-    "background": {
-      "service_worker": "src/background/background.js"
-    },
-    "icons": {
-      "16": "assets/logo.png",
-      "48": "assets/logo.png",
-      "128": "assets/logo.png"
-    },
-    "permissions": ["storage", "activeTab", "scripting", "tabs", "alarms", "notifications"],
-    "host_permissions": ["<all_urls>"],
-    "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["src/content/content.js"],
-        "run_at": "document_idle"
-      }
-    ],
-    "options_ui": {
-      "page": "src/popup/popup.html",
-      "open_in_tab": false
+  "manifest_version": 3,
+  "name": "Picksy",
+  "description": "Smart shopping assistant: Price tracking, Quality Analysis, and Budget Insights.",
+  "version": "1.0.0",
+  "action": {
+    "default_title": "Picksy",
+    "default_popup": "src/popup/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background/background.js"
+  },
+  "icons": {
+    "16": "assets/logo.png",
+    "48": "assets/logo.png",
+    "128": "assets/logo.png"
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:5000/*",
+    "https://*.amazon.com/*",
+    "https://*.flipkart.com/*",
+    "https://*.myntra.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content/content.js"
+      ],
+      "run_at": "document_idle"
     }
-  }
-  
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "assets/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}

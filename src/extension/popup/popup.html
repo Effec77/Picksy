@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picksy Price Tracker</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <img src="../icons/icon-32.png" alt="Picksy" class="logo">
+            <h1>Picksy</h1>
+        </header>
+
+        <main class="main">
+            <!-- Product Detection Section -->
+            <section class="product-detection" id="productDetection">
+                <div class="product-info" id="productInfo" style="display: none;">
+                    <img id="productImage" class="product-image" alt="Product">
+                    <div class="product-details">
+                        <h3 id="productTitle" class="product-title"></h3>
+                        <div class="price-info">
+                            <span id="currentPrice" class="current-price"></span>
+                            <span id="availability" class="availability"></span>
+                        </div>
+                        <div class="trust-indicator">
+                            <span id="trustScore" class="trust-score"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="no-product" id="noProduct">
+                    <p>No supported product detected on this page.</p>
+                    <p class="supported-sites">Supported: Amazon, eBay, Walmart, Target, Best Buy</p>
+                </div>
+            </section>
+
+            <!-- Action Buttons -->
+            <section class="actions">
+                <button id="trackButton" class="btn btn-primary" disabled>
+                    Track This Product
+                </button>
+                <button id="compareButton" class="btn btn-secondary" disabled>
+                    Compare Prices
+                </button>
+            </section>
+
+            <!-- Tracked Products -->
+            <section class="tracked-products">
+                <h3>Your Tracked Products</h3>
+                <div id="trackedList" class="tracked-list">
+                    <div class="empty-state">
+                        <p>No products tracked yet.</p>
+                        <p class="hint">Visit a product page and click "Track This Product"</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Price Comparison -->
+            <section class="price-comparison" id="priceComparison" style="display: none;">
+                <h3>Price Comparison</h3>
+                <div id="comparisonResults" class="comparison-results"></div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <button id="pricingButton" class="btn btn-text">Upgrade</button>
+            <button id="settingsButton" class="btn btn-text">Settings</button>
+            <button id="helpButton" class="btn btn-text">Help</button>
+        </footer>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

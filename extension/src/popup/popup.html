@@ -1,608 +1,514 @@
-<!DOCTYPE html>
-<html>
-
-<head>
-  <meta charset="UTF-8" />
-  <title>Picksy</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      width: 400px;
-      padding: 10px;
-      max-height: 600px;
-      overflow-y: auto;
-    }
-
-    button {
-      margin-top: 5px;
-      padding: 5px 10px;
-      cursor: pointer;
-      border: none;
-      border-radius: 3px;
-      background: #007cba;
-      color: white;
-    }
-
-    button:hover {
-      background: #005a87;
-    }
-
-    .viewHistoryBtn {
-      background: #28a745;
-      margin-right: 5px;
-    }
-
-    .viewHistoryBtn:hover {
-      background: #218838;
-    }
-
-    .deleteBtn {
-      background: #dc3545;
-    }
-
-    .deleteBtn:hover {
-      background: #c82333;
-    }
-
-    .targetPriceInput {
-      width: 120px;
-      padding: 3px;
-      border: 1px solid #ddd;
-      border-radius: 3px;
-      font-size: 12px;
-    }
-
-    .setTargetBtn {
-      padding: 3px 8px;
-      font-size: 12px;
-      background: #ffc107;
-      color: #000;
-      margin-left: 3px;
-    }
-
-    .setTargetBtn:hover {
-      background: #e0a800;
-    }
-
-    .clearTargetBtn {
-      padding: 3px 8px;
-      font-size: 12px;
-      background: #6c757d;
-      margin-left: 3px;
-    }
-
-    .clearTargetBtn:hover {
-      background: #5a6268;
-    }
-
-    .product {
-      border: 1px solid #ddd;
-      border-radius: 5px;
-      padding: 8px;
-      margin-top: 8px;
-    }
-
-    .currency-toggle {
-      display: flex;
-      gap: 5px;
-      margin: 10px 0;
-    }
-
-    .currency-btn {
-      padding: 3px 8px;
-      font-size: 12px;
-    }
-
-    .currency-btn.active {
-      background: #28a745;
-    }
-
-    .comparison-section {
-      background: #f8f9fa;
-      padding: 8px;
-      border-radius: 5px;
-      margin: 8px 0;
-    }
-
-    .comparison-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 4px 0;
-      border-bottom: 1px solid #eee;
-    }
-
-    .comparison-item:last-child {
-      border-bottom: none;
-    }
-
-    .chart-container {
-      margin: 10px 0;
-      height: 200px;
-    }
-
-    .stock-indicator {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-right: 5px;
-    }
-
-    .stock-in {
-      background: #28a745;
-    }
-
-    .stock-out {
-      background: #dc3545;
-    }
-
-    .stock-unknown {
-      background: #6c757d;
-    }
-
-    .tabs {
-      display: flex;
-      border-bottom: 1px solid #ddd;
-      margin-bottom: 10px;
-    }
-
-    .tab {
-      padding: 8px 12px;
-      cursor: pointer;
-      border: none;
-      background: none;
-      color: #666;
-    }
-
-    .tab.active {
-      background: #007cba;
-      color: white;
-    }
-
-    .tab-content {
-      display: none;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    /* Settings Styles */
-    .setting-group {
-      margin: 15px 0;
-      padding: 10px;
-      background: #f9f9f9;
-      border-radius: 5px;
-    }
-
-    .setting-label {
-      display: flex;
-      align-items: center;
-      cursor: pointer;
-      font-weight: 500;
-      font-size: 14px;
-    }
-
-    .setting-label input[type="checkbox"] {
-      margin-right: 10px;
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-    }
-
-    .setting-description {
-      margin: 5px 0 0 28px;
-      font-size: 12px;
-      color: #666;
-    }
-
-    .test-btn {
-      width: 100%;
-      padding: 10px;
-      font-size: 14px;
-      background: #ff9800;
-      margin-top: 0;
-    }
-
-    .test-btn:hover {
-      background: #e68900;
-    }
-
-    .info-section {
-      margin: 15px 0;
-      padding: 10px;
-      background: #e8f4f8;
-      border-radius: 5px;
-      border-left: 3px solid #007cba;
-    }
-
-    .info-section h4 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      color: #007cba;
-    }
-
-    .info-section p {
-      margin: 5px 0;
-      font-size: 13px;
-    }
-
-    .info-section strong {
-      color: #333;
-    }
-
-    /* Toast Animations */
-    @keyframes slideUp {
-      from {
-        transform: translateX(-50%) translateY(20px);
-        opacity: 0;
-      }
-      to {
-        transform: translateX(-50%) translateY(0);
-        opacity: 1;
-      }
-    }
-
-    @keyframes slideDown {
-      from {
-        transform: translateX(-50%) translateY(0);
-        opacity: 1;
-      }
-      to {
-        transform: translateX(-50%) translateY(20px);
-        opacity: 0;
-      }
-    }
-
-    /* Loading Spinner */
-    .loading-spinner {
-      border: 3px solid #f3f3f3;
-      border-top: 3px solid #007cba;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* Disabled button state */
-    button:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    /* Smooth Animations */
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @keyframes slideInLeft {
-      from {
-        opacity: 0;
-        transform: translateX(-20px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    @keyframes pulse {
-      0%, 100% {
-        transform: scale(1);
-      }
-      50% {
-        transform: scale(1.05);
-      }
-    }
-
-    /* Enhanced Product Cards */
-    .product {
-      /* Removed animation for better performance */
-      transition: box-shadow 0.2s ease;
-    }
-
-    .product:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      /* Removed transform for better performance */
-    }
-
-    /* Better Button Hover Effects */
-    button {
-      transition: all 0.2s ease;
-    }
-
-    button:hover:not(:disabled) {
-      transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    button:active:not(:disabled) {
-      transform: translateY(0);
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    /* Tab Transitions */
-    .tab {
-      transition: all 0.2s ease;
-    }
-
-    .tab:hover {
-      background: rgba(0, 124, 186, 0.1);
-    }
-
-    /* Comparison Item Hover */
-    .comparison-item {
-      transition: all 0.2s ease;
-    }
-
-    /* Stock Indicator Pulse - Disabled for performance */
-    /* .stock-in {
-      animation: pulse 2s ease-in-out infinite;
-    } */
-
-    /* Currency Button Transitions */
-    .currency-btn {
-      transition: all 0.2s ease;
-    }
-
-    .currency-btn:hover {
-      transform: scale(1.05);
-    }
-
-    /* Smooth Scrolling */
-    body {
-      scroll-behavior: smooth;
-    }
-
-    /* Link Hover Effects */
-    a {
-      transition: all 0.2s ease;
-    }
-
-    a:hover {
-      opacity: 0.8;
-      transform: translateX(2px);
-    }
-
-    /* Setting Toggle Animations */
-    .setting-group {
-      transition: all 0.2s ease;
-    }
-
-    .setting-group:hover {
-      background: #f0f0f0;
-      transform: translateX(3px);
-    }
-
-    /* Info Section Animations */
-    .info-section {
-      animation: fadeIn 0.4s ease;
-    }
-
-    /* Comparison Item Hover Effects */
-    .comparison-item-card:hover {
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-
-    .comparison-link:hover {
-      background: #005a87 !important;
-    }
-
-    .open-product-link:hover {
-      background: #5849c7 !important;
-    }
-  </style>
-</head>
-
-<body>
-  <div style="
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    padding: 15px;
-    margin: -10px -10px 15px -10px;
-    text-align: center;
-    border-radius: 0 0 10px 10px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  ">
-    <h2 style="
-      margin: 0;
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    ">🛍️ Picksy</h2>
-    <p style="
-      margin: 5px 0 0 0;
-      color: rgba(255,255,255,0.9);
-      font-size: 12px;
-      font-weight: 500;
-    ">Smart Shopping Assistant</p>
-  </div>
-
-  <!-- Currency Toggle -->
-  <div class="currency-toggle">
-    <button id="currencyINR" class="currency-btn active">₹ INR</button>
-    <button id="currencyUSD" class="currency-btn">$ USD</button>
-    <button id="currencyEUR" class="currency-btn">€ EUR</button>
-    <button id="currencyGBP" class="currency-btn">£ GBP</button>
-  </div>
-
-  <button id="scanBtn" style="
-    width: 100%;
-    padding: 12px;
-    font-size: 16px;
-    font-weight: bold;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border: none;
-    border-radius: 8px;
-    color: white;
-    cursor: pointer;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-  ">🔍 Scan This Page</button>
-
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab active" data-tab="current">Current</button>
-    <button class="tab" data-tab="history">History</button>
-    <button class="tab" data-tab="comparison">Compare</button>
-    <button class="tab" data-tab="settings">Settings</button>
-  </div>
-
-  <!-- Current Product Tab -->
-  <div id="current" class="tab-content active">
-    <div id="result">
-      <div style="
-        text-align: center;
-        padding: 40px 20px;
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        border-radius: 10px;
-        margin-top: 10px;
-      ">
-        <div style="font-size: 64px; margin-bottom: 15px; animation: pulse 2s ease-in-out infinite;">🔍</div>
-        <h3 style="margin: 0 0 10px 0; color: #333;">Ready to Track Prices!</h3>
-        <p style="margin: 0; font-size: 14px; color: #666; line-height: 1.6;">
-          Visit any product page on:<br/>
-          <strong>Amazon • Flipkart • Myntra • Nike • Adidas • Puma</strong><br/>
-          <br/>
-          Then click <strong>"Scan This Page"</strong> above
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- History Tab -->
-  <div id="history" class="tab-content">
-    <div class="chart-container">
-      <div id="priceChart">
-        <div style="
-          text-align: center;
-          padding: 40px 20px;
-          background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-          border-radius: 10px;
-          height: 100%;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        ">
-          <div style="font-size: 48px; margin-bottom: 10px;">📊</div>
-          <h3 style="margin: 0 0 8px 0; color: #333;">No Price History Yet</h3>
-          <p style="margin: 0; font-size: 13px; color: #666;">
-            Scan and save products to see price trends over time
-          </p>
-        </div>
-      </div>
-    </div>
-    <div id="historyDetails"></div>
-  </div>
-
-  <!-- Comparison Tab -->
-  <div id="comparison" class="tab-content">
-    <div id="comparisonResults">
-      <div style="
-        text-align: center;
-        padding: 40px 20px;
-        background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-        border-radius: 10px;
-        margin-top: 10px;
-      ">
-        <div style="font-size: 48px; margin-bottom: 10px;">🔄</div>
-        <h3 style="margin: 0 0 8px 0; color: #333;">Price Comparison</h3>
-        <p style="margin: 0; font-size: 13px; color: #666;">
-          Scan a product to see comparison links<br/>
-          and find the best deals across sites
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Settings Tab -->
-  <div id="settings" class="tab-content">
-    <h3 style="
-      margin: 10px 0 15px 0;
-      color: #333;
-      font-size: 18px;
-      border-bottom: 2px solid #007cba;
-      padding-bottom: 8px;
-    ">⚙️ Settings</h3>
-    
-    <div class="setting-group">
-      <label class="setting-label">
-        <input type="checkbox" id="autoScanToggle" checked>
-        <span>🔄 Auto Price Checking</span>
-      </label>
-      <p class="setting-description">Automatically check prices every 6 hours</p>
-    </div>
-
-    <div class="setting-group">
-      <label class="setting-label">
-        <input type="checkbox" id="priceAlertsToggle" checked>
-        <span>🔔 Price Drop Notifications</span>
-      </label>
-      <p class="setting-description">Get notified when prices drop</p>
-    </div>
-
-    <div class="setting-group">
-      <label class="setting-label">
-        <input type="checkbox" id="stockAlertsToggle" checked>
-        <span>📦 Stock Alerts</span>
-      </label>
-      <p class="setting-description">Get notified when out-of-stock items return</p>
-    </div>
-
-    <div class="setting-group">
-      <button id="testBackgroundBtn" class="test-btn">🧪 Test Background Scan Now</button>
-      <p class="setting-description">Manually trigger background price check</p>
-    </div>
-
-    <div class="info-section">
-      <h4>📊 Scan Information</h4>
-      <p><strong>Last scan:</strong> <span id="lastScanTime">Never</span></p>
-      <p><strong>Next scan:</strong> <span id="nextScanTime">--</span></p>
-      <p><strong>Saved products:</strong> <span id="savedCount">0</span></p>
-    </div>
-
-    <div class="info-section">
-      <h4>ℹ️ About</h4>
-      <p><strong>Version:</strong> 0.1.0</p>
-      <p><strong>Status:</strong> <span style="color: #28a745;">● Active</span></p>
-    </div>
-  </div>
-
-  <h3 style="
-    margin: 20px 0 10px 0;
-    color: #333;
-    font-size: 16px;
-    border-bottom: 2px solid #28a745;
-    padding-bottom: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  ">
-    <span>💾 Saved Items</span>
-    <span id="savedItemsCount" style="
-      background: #28a745;
-      color: white;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 12px;
-      font-weight: bold;
-    ">0</span>
-  </h3>
-  <div id="savedItems"></div>
-
-  <script src="popup.js"></script>
-</body>
-
-</html>
+< !DOCTYPE html><html><head><meta charset="UTF-8"><script src="../../assets/chart.js"></script><style>:root {
+  /* User Defined Palette */
+  --primary: #FF7D01;
+  /* Vivid Tangerine */
+  --primary-dark: #e66b00;
+  /* Darker Tangerine */
+  --secondary: #14616B;
+  /* Stormy Teal */
+  --accent: #78280F;
+  /* Brandy */
+  --danger: #c0392b;
+  --success: #2ecc71;
+  --dark: #001624;
+  /* Ink Black */
+  --light: #FFECD1;
+  /* Papaya Whip */
+
+  /* Glassmorphism & Depth */
+  --glass: rgba(255, 255, 255, 0.95);
+  --glass-hover: rgba(255, 255, 255, 1);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  --glow: 0 0 20px rgba(255, 125, 1, 0.4);
+}
+
+body {
+  font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  width: 400px;
+  margin: 0;
+  padding: 0;
+  /* Ink Black to Stormy Teal Gradient */
+  background: linear-gradient(135deg, #001624 0%, #14616B 100%);
+  color: var(--dark);
+  min-height: 600px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(236, 240, 241, 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(236, 240, 241, 0.5);
+}
+
+/* Header */
+.header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 20px;
+  color: var(--dark);
+  border-radius: 0 0 25px 25px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 10;
+  border-bottom: 3px solid var(--accent);
+  /* Brandy Accent */
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: linear-gradient(135deg, #FF7D01 0%, #FFECD1 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+#authSection {
+  text-align: center;
+  margin-top: 10px;
+}
+
+#googleLoginBtn {
+  background: white;
+  color: #333;
+  border-radius: 20px;
+  padding: 5px 15px;
+  font-size: 11px;
+  border: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+#userInfo {
+  font-size: 11px;
+  margin-top: 5px;
+  display: none;
+}
+
+.header p {
+  margin: 5px 0 0 0;
+  opacity: 0.9;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* Container */
+.container {
+  padding: 15px;
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  font-family: inherit;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+.btn-main {
+  width: 100%;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #001624;
+  /* Ink Black text on bright orange for contrast */
+  border-radius: 15px;
+  box-shadow: 0 8px 20px rgba(255, 125, 1, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-main:hover {
+  box-shadow: 0 10px 25px rgba(255, 125, 1, 0.5);
+  transform: translateY(-3px);
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+}
+
+.btn-main:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Currency Toggles */
+.currency-toggle {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  padding: 5px;
+  display: flex;
+  gap: 5px;
+  margin: -25px auto 15px auto;
+  width: fit-content;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  position: relative;
+  z-index: 12;
+  backdrop-filter: blur(5px);
+}
+
+.currency-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: transparent;
+  color: #555;
+  /* Darkened from #7f8c8d */
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #555;
+  /* Darkened from #7f8c8d */
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* Action Buttons */
+.action-grid {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.btn-action {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-decoration: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+
+.btn-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+.btn-pixie {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  color: #001624;
+}
+
+.btn-save {
+  background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+  /* Keep Green for Save/Success */
+}
+
+.btn-history {
+  background: linear-gradient(135deg, var(--secondary) 0%, #0e4b55 100%);
+  /* Stormy Teal for History */
+}
+
+.btn-open {
+  background: linear-gradient(135deg, var(--dark) 0%, #000000 100%);
+  /* Ink Black for External Link */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Product Card */
+.product-card {
+  background: #ffffff;
+  /* Opaque white */
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  /* Prevent wrapping */
+  overflow-x: auto;
+  /* Allow horizontal scroll */
+  -webkit-overflow-scrolling: touch;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 6px;
+  border-radius: 12px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  gap: 5px;
+}
+
+/* Hide scrollbar for Chrome/Safari/Opera */
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  flex: 0 0 auto;
+  /* Don't shrink */
+  text-align: center;
+  padding: 10px 15px;
+  /* More horizontal padding */
+  border-radius: 10px;
+  color: #555;
+  /* High contrast */
+  background: transparent;
+  font-weight: 700;
+  font-size: 13px;
+  position: relative;
+  white-space: nowrap;
+  /* Keep text on one line */
+  transition: all 0.3s ease;
+}
+
+.tab.active {
+  background: white;
+  color: var(--primary);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.tab-content {
+  display: none;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Empty States */
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.empty-icon {
+  display: block;
+  animation: float 3s ease-in-out infinite;
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.1));
+}
+
+/* Comparison Table */
+.comparison-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.comparison-row {
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s;
+  backdrop-filter: blur(5px);
+}
+
+.comparison-row td {
+  padding: 12px;
+}
+
+.comparison-row td:first-child {
+  border-radius: 10px 0 0 10px;
+}
+
+.comparison-row td:last-child {
+  border-radius: 0 10px 10px 0;
+}
+
+.comparison-row:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.6;
+  }
+}
+
+/* Loading */
+.loading-spinner {
+  border: 3px solid rgba(108, 92, 231, 0.1);
+  border-top: 3px solid var(--primary);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 10px auto;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Saved Items */
+.saved-item-card {
+  background: white;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s;
+  border: 1px solid #f0f0f0;
+}
+
+.saved-item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.saved-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2d3436;
+  margin-bottom: 8px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.saved-item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.saved-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  flex: 1;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid #dfe6e9;
+  color: #636e72;
+}
+
+.btn-outline:hover {
+  background: #f5f6fa;
+  color: #2d3436;
+}
+
+.btn-delete {
+  background: #ffeaa7;
+  color: #d35400;
+}
+
+.btn-delete:hover {
+  background: #f1c40f;
+}
+
+.target-price-box {
+  background: #f8f9fa;
+  padding: 8px;
+  border-radius: 6px;
+  margin: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e9ecef;
+}
+}
+
+</style></head><body><div class="header"><h2>🛍️ Picksy</h2><p>Your AI Shopping Assistant</p></div><div class="container"><button id="scanBtn" class="btn-main"><span>🔍</span>Scan Current Page</button><div class="tabs" style="margin-top: 20px;"><button class="tab active" data-tab="current">Current</button><button class="tab" data-tab="history">History</button><button class="tab" data-tab="comparison">Compare</button><button class="tab" data-tab="reviews">Reviews</button></div>< !-- CURRENT TAB --><div id="current" class="tab-content active"><div id="result"><div class="empty-state"><span class="empty-icon">👋</span><h3 style="margin: 0 0 10px 0; color: var(--dark);">Ready to Shop !</h3><p style="margin: 0; color: #333; font-size: 14px; line-height: 1.6;">Visit a product page on <strong>Amazon,
+Flipkart,
+Nike,
+etc.</strong>and click Scan. </p></div></div></div>< !-- REVIEWS TAB --><div id="reviews" class="tab-content"><div id="reviewsContent"><div id="reviewSummary" style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; box-shadow:var(--shadow);"><h4 style="margin:0 0 10px 0;">📊 Review Summary</h4><div id="summaryText" style="font-size:13px; color:#555; line-height:1.5;">Scan a product to see what people are saying... </div></div><div id="chatInterface" style="background:white; border-radius:10px; overflow:hidden; box-shadow:var(--shadow); display:flex; flex-direction:column; height:300px;"><div id="chatHistory" style="flex:1; padding:10px; overflow-y:auto; background:#f9f9f9;"><div class="chat-msg" style="background:#e1f5fe; padding:8px; border-radius:10px; align-self:flex-start; margin-bottom:5px; font-size:12px;">Ask generic questions or about specific features ! </div></div><div style="padding:10px; background:white; border-top:1px solid #eee; display:flex;"><input type="text" id="chatInput" placeholder="Ask about battery, camera..." style="flex:1; padding:8px; border:1px solid #ddd; border-radius:20px; outline:none;"><button id="sendChatBtn" style="background:var(--primary); color:white; border:none; width:32px; height:32px; border-radius:50%; margin-left:5px;">→</button></div></div></div></div>< !-- HISTORY TAB --><div id="history" class="tab-content"><div id="historyDetails"></div><div class="chart-container" style="background: white; padding: 10px; border-radius: 12px; height: 200px; margin-top: 15px; box-shadow: var(--shadow);"><div id="priceChart" style="height: 100%; display: flex; align-items: center; justify-content: center; color: #b2bec3;"><span>Select a product to see history</span></div></div></div>< !-- COMPARISON TAB --><div id="comparison" class="tab-content"><div id="comparisonResults"><div id="comparisonInitialState" class="empty-state"><span class="empty-icon">⚖️</span><h3 style="margin: 0 0 10px 0;">Compare Prices</h3><p style="margin: 0; color: #636e72; font-size: 14px;">Scan a product first to compare it across 12+Stores.</p><button id="startComparisonBtn" class="btn-main" style="margin-top: 15px; background: linear-gradient(135deg, #00cec9 0%, #0984e3 100%);">🚀 Start Comparison</button></div>< !-- Progress --><div id="comparisonProgress" style="display: none; padding: 20px;"><h4 style="margin: 0 0 10px 0; text-align: center;">🔍 Searching 12+Stores...</h4><div style="background: #dfe6e9; height: 8px; border-radius: 4px; overflow: hidden;"><div id="progressBar" style="background: var(--primary); height: 100%; width: 0%; transition: width 0.3s ease;"></div></div><p id="progressText" style="text-align: center; font-size: 12px; color: #636e72; margin-top: 8px;">Initializing...</p></div>< !-- Results Container --><div id="comparisonResultsContainer" style="display: none;"><div id="bestDealContent"></div><div id="allResultsContainer" style="margin-top: 15px;"><h4 style="margin: 0 0 10px 0; font-size: 14px; color: #636e72;">All Matches <span id="resultsCount" style="background: var(--light); padding: 2px 8px; border-radius: 10px; font-size: 11px;">0</span></h4><div id="allResults"></div></div><div id="statsContent" style="margin-top: 20px; font-size: 12px; color: #636e72;"></div></div></div></div></div><script src="../../utils/config.js"></script><script src="api.js"></script><script src="../../utils/normalize.js"></script><script src="../../utils/extraction.js"></script><script src="../../utils/matcher.js"></script><script src="../../utils/aiExtraction.js"></script><script src="../../utils/scraper.js"></script><script src="../../utils/priceComparison.js"></script><script src="popup.js"></script></body></html>

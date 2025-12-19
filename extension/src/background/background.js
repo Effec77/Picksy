@@ -1,4 +1,9 @@
 // ----------------- ENHANCED PICKSY BACKGROUND SCRIPT -----------------
+try {
+  importScripts('../../utils/normalize.js');
+} catch (e) {
+  console.error("Failed to import utils/normalize.js", e);
+}
 
 // ----------------- SERVICE WORKER KEEPALIVE -----------------
 // Keep service worker alive
@@ -7,13 +12,22 @@ let keepAliveInterval;
 function startKeepAlive() {
   if (keepAliveInterval) return;
   keepAliveInterval = setInterval(() => {
-    chrome.runtime.getPlatformInfo(() => {
+    // Use Promise-based API to avoid callback errors
+    chrome.runtime.getPlatformInfo().then(() => {
       // Just a ping to keep service worker alive
+    }).catch((error) => {
+      // Silently ignore errors - this is just a keepalive ping
+      console.debug('Keepalive ping:', error.message);
     });
   }, 20000); // Every 20 seconds
 }
 
-startKeepAlive();
+// Initialize keepalive when service worker starts
+try {
+  startKeepAlive();
+} catch (error) {
+  console.error('Failed to start keepalive:', error);
+}
 
 // ----------------- INSTALL DEFAULTS -----------------
 chrome.runtime.onInstalled.addListener(() => {
@@ -51,7 +65,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
             if (!lastError.message.includes("Receiving end does not exist")) {
               console.error("🔧 Error details:", lastError.message);
             }
-            
+
             // Silently inject content script if needed
             chrome.scripting.executeScript({
               target: { tabId: tab.id },
@@ -237,21 +251,7 @@ function scrapeProductsInSequence(products) {
   scrapeNext();
 }
 
-// ----------------- ENHANCED HISTORY HANDLING -----------------
-function generateProductId(url, title) {
-  if (url.includes("amazon")) {
-    const match = url.match(/\/dp\/([A-Z0-9]{10})/);
-    if (match) return `amazon_${match[1]}`;
-  }
-  if (url.includes("flipkart")) {
-    const match = url.match(/\/p\/([a-zA-Z0-9]+)/);
-    if (match) return `flipkart_${match[1]}`;
-  }
 
-  const domain = new URL(url).hostname.replace("www.", "");
-  const titleHash = title.toLowerCase().replace(/[^a-z0-9]/g, "").substring(0, 20);
-  return `${domain}_${titleHash}`;
-}
 
 function saveToHistory(payload, fromAuto = false) {
   if (!payload || !payload.url || !payload.title) {
@@ -436,28 +436,28 @@ chrome.notifications.onClicked.addListener((notificationId) => {
 
 // ------------- TEST NOTIFICATION FUNCTION (for background console) -------------
 // Open background service worker console and run: testNotificationFromBackground()
-globalThis.testNotificationFromBackground = function() {
+globalThis.testNotificationFromBackground = function () {
   console.log("🧪 Testing notification from background...");
-  
+
   chrome.storage.local.get(null, (items) => {
     const historyKeys = Object.keys(items).filter(k => k.startsWith('history_'));
-    
+
     if (historyKeys.length === 0) {
       console.error("❌ No products with history found. Save a product first!");
       return;
     }
-    
+
     const firstProduct = items[historyKeys[0]];
     console.log("Testing with:", firstProduct.title);
-    
+
     // Get the last price
     const lastPrice = firstProduct.history[firstProduct.history.length - 1].price;
     console.log("Last price:", lastPrice);
-    
+
     // Create a lower price to trigger notification
     const lowerPrice = Math.round(lastPrice * 0.9); // 10% discount
     console.log("New lower price:", lowerPrice);
-    
+
     // Trigger notification
     saveToHistory({
       title: firstProduct.title,
@@ -467,7 +467,7 @@ globalThis.testNotificationFromBackground = function() {
       availability: "InStock",
       source: firstProduct.source
     }, true);
-    
+
     console.log("✅ Notification should appear now!");
   });
 };
