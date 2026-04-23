@@ -167,6 +167,8 @@ const PriceComparison = {
     // Extract search keywords from product title
     const keywords = this.extractSearchKeywords(product.title);
     console.log('🔍 Extracted keywords:', keywords);
+    const primaryCategory = this.inferPrimaryCategory(product);
+    console.log('🔍 Inferred product category:', primaryCategory);
     
     // Get current site domain to exclude it
     const currentSite = this.getCurrentSiteDomain(product.source || product.url || '');
@@ -194,6 +196,12 @@ const PriceComparison = {
       if (this.shouldExcludeSite(product, site)) {
         return false;
       }
+
+      // Hard category/domain compatibility gate (prevents blind scraping to irrelevant sites)
+      if (!this.isSiteCompatibleWithProduct(site, primaryCategory)) {
+        console.log(`❌ Excluding ${site.name} (category/site incompatible with ${primaryCategory})`);
+        return false;
+      }
       
       // WHITELIST for electronics (phones, laptops, etc.)
       if (this.isElectronicsProduct(product)) {
@@ -211,10 +219,15 @@ const PriceComparison = {
         }
       }
       
-      // For general sites, include if category is 'all'
+      // For general marketplace sites, include only if they are trusted marketplaces
       if (site.category === 'all') {
-        console.log(`✅ Including ${site.name} (general site)`);
-        return true;
+        const isMarketplace = this.isKnownMarketplace(site);
+        if (isMarketplace) {
+          console.log(`✅ Including ${site.name} (trusted marketplace)`);
+          return true;
+        }
+        console.log(`❌ Excluding ${site.name} (unknown all-category site)`);
+        return false;
       }
       
       // For other products, use category matching
@@ -313,6 +326,78 @@ const PriceComparison = {
     ];
     
     return electronicsKeywords.some(keyword => title.includes(keyword));
+  },
+
+  /**
+   * Infer primary product category from title.
+   */
+  inferPrimaryCategory(product) {
+    const title = (product?.title || '').toLowerCase();
+    if (!title) return 'general';
+
+    const keywords = {
+      electronics: ['phone', 'iphone', 'android', 'smartphone', 'mobile', 'laptop', 'computer', 'pc', 'macbook', 'tablet', 'ipad', 'tv', 'monitor', 'camera', 'smartwatch', 'headphone', 'earphone', 'earbud', 'speaker', 'charger', 'powerbank'],
+      fashion: ['shoe', 'shoes', 'sneaker', 'sneakers', 'boot', 'boots', 'loafer', 'loafers', 'sandals', 'slippers', 'slides', 'heels', 'shirt', 'tshirt', 't-shirt', 'dress', 'jeans', 'jacket', 'hoodie', 'kurta', 'saree'],
+      beauty: ['makeup', 'cosmetic', 'lipstick', 'foundation', 'skincare', 'cream', 'perfume', 'shampoo'],
+      sports: ['running', 'training', 'gym', 'sports', 'football', 'cricket', 'tennis', 'cycle', 'yoga'],
+      kids: ['baby', 'kids', 'children', 'toy', 'diaper', 'stroller'],
+      eyewear: ['glasses', 'eyeglasses', 'sunglasses', 'lens', 'contact', 'frame']
+    };
+
+    let bestCategory = 'general';
+    let bestScore = 0;
+    Object.entries(keywords).forEach(([category, terms]) => {
+      const score = terms.reduce((acc, term) => acc + (title.includes(term) ? 1 : 0), 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestCategory = category;
+      }
+    });
+
+    return bestScore > 0 ? bestCategory : 'general';
+  },
+
+  /**
+   * Only allow known trusted marketplaces for category=all.
+   */
+  isKnownMarketplace(site) {
+    const domain = (site.domain || '').toLowerCase();
+    const trustedMarketplaces = ['amazon.in', 'flipkart.com', 'tatacliq.com', 'snapdeal.com'];
+    return trustedMarketplaces.some(d => domain.includes(d));
+  },
+
+  /**
+   * Strong compatibility check between product category and site.
+   */
+  isSiteCompatibleWithProduct(site, productCategory) {
+    const siteCategory = (site.category || '').toLowerCase();
+    const domain = (site.domain || '').toLowerCase();
+
+    // Brand/accessory/electronics-focused domains should never receive non-electronics products.
+    const accessoryFocusedDomains = ['boat-lifestyle.com', 'gonoise.com', 'noise', 'jbl', 'skullcandy'];
+    if (accessoryFocusedDomains.some(d => domain.includes(d)) && productCategory !== 'electronics') {
+      return false;
+    }
+
+    if (siteCategory === 'all') {
+      return this.isKnownMarketplace(site);
+    }
+
+    // Electronics products should not go to fashion/beauty/kids/eyewear-only sites.
+    if (productCategory === 'electronics') {
+      return siteCategory === 'electronics' || siteCategory === 'all';
+    }
+
+    // Fashion and sports overlap for footwear/apparel.
+    if (productCategory === 'fashion') {
+      return siteCategory === 'fashion' || siteCategory === 'sports' || siteCategory === 'all';
+    }
+
+    if (productCategory === 'sports') {
+      return siteCategory === 'sports' || siteCategory === 'fashion' || siteCategory === 'all';
+    }
+
+    return siteCategory === productCategory || siteCategory === 'all';
   },
 
   /**
@@ -681,11 +766,12 @@ const PriceComparison = {
   shouldExcludeSite(product, site) {
     const title = product.title.toLowerCase();
     const siteName = site.name.toLowerCase();
+    const primaryCategory = this.inferPrimaryCategory(product);
     
     // STRICT exclusion rules - be very aggressive to prevent mismatches
     const exclusions = [
-      // Audio/accessories sites - NEVER get phones, computers, etc.
-      { sites: ['boat', 'boAt'], exclude: ['phone', 'iphone', 'smartphone', 'mobile', 'laptop', 'computer', 'tablet', 'tv', 'monitor', 'apple', 'samsung', 'oneplus'] },
+      // Audio/accessories sites - NEVER get non-electronics.
+      { sites: ['boat', 'boAt', 'noise', 'jbl', 'skullcandy'], exclude: primaryCategory === 'electronics' ? [] : [title] },
       
       // Beauty sites - NEVER get electronics
       { sites: ['nykaa'], exclude: ['phone', 'iphone', 'smartphone', 'mobile', 'laptop', 'computer', 'tablet', 'tv', 'monitor', 'apple', 'samsung', 'electronics'] },
