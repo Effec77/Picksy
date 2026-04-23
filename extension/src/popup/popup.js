@@ -1230,9 +1230,12 @@ function showServiceWorkerWarning() {
     ">🔄 Reload Extension</button>
   `;
   
-  // Insert at the top of the popup
-  const container = document.querySelector('.container');
-  container.insertBefore(warningBanner, container.firstChild);
+  // Insert at the top of the popup safely (popup has no .container wrapper)
+  if (document.body.firstChild) {
+    document.body.insertBefore(warningBanner, document.body.firstChild);
+  } else {
+    document.body.appendChild(warningBanner);
+  }
   
   // Add reload button handler
   document.getElementById('reloadExtensionBtn').addEventListener('click', () => {
@@ -1375,17 +1378,16 @@ async function startPriceComparison() {
     if (progressElement) {
       progressElement.style.display = 'block';
     }
-    
-    // Create mock product if none exists
+
+    // Require a real scanned product
     if (!currentProduct) {
-      currentProduct = {
-        title: 'Sample Product for Testing',
-        price: '₹10,000',
-        priceValue: 10000,
-        source: 'test.com'
-      };
+      showToast('Please scan a product first before comparison.', 'warning');
+      if (progressElement) {
+        progressElement.style.display = 'none';
+      }
+      return;
     }
-    
+
     console.log('🚀 SIMPLE: Using product:', currentProduct.title);
     
     // Load price comparison engine
@@ -2261,3 +2263,4 @@ window.setupComparisonTab = setupComparisonTab;
 window.updateComparisonTabForProduct = updateComparisonTabForProduct;
 window.recreateComparisonInterface = recreateComparisonInterface;
 window.createComparisonInterface = createComparisonInterface;
+

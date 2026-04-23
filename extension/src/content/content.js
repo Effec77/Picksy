@@ -1685,6 +1685,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type === "PICKSY_SCRAPE") {
     console.log("🔧 Starting product scrape...");
     scrapeProduct().then((payload) => {
+      if (msg.fromAutoScan) {
+        payload._fromAutoScan = true;
+      }
       console.log("🔧 Scrape completed, sending result:", payload);
       chrome.runtime.sendMessage({ type: "PICKSY_SCRAPE_RESULT", payload });
     }).catch((error) => {

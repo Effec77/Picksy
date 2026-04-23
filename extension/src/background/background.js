@@ -28,8 +28,9 @@ try {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({
     picksySettings: {
-      oosToggle: false,
+      oosToggle: false, // Backward compatibility with older setting key
       priceAlerts: true,
+      stockAlerts: true,
       autoScanEnabled: true
     },
     picksyCurrency: "INR",
@@ -104,9 +105,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // scrape result comes back from content.js
   if (msg?.type === "PICKSY_SCRAPE_RESULT") {
     const payload = msg.payload || {};
+    const fromAutoScan = Boolean(payload._fromAutoScan);
+
+    if (payload && Object.prototype.hasOwnProperty.call(payload, "_fromAutoScan")) {
+      delete payload._fromAutoScan;
+    }
 
     chrome.storage.local.set({ picksyLastScrape: payload });
-    saveToHistory(payload);
+    saveToHistory(payload, fromAutoScan);
     chrome.runtime.sendMessage({
       type: "PICKSY_SCRAPE_RESULT_BROADCAST",
       payload,
@@ -208,36 +214,65 @@ function scrapeProductsInSequence(products) {
       }
 
       const tabId = tab.id;
-      let scraped = false;
+      let isDone = false;
+
+      function finalizeAndContinue(delayMs = 3000) {
+        if (isDone) return;
+        isDone = true;
+        currentIndex++;
+        setTimeout(scrapeNext, delayMs);
+      }
 
       // Wait for page to load and content script to inject
       setTimeout(() => {
-        chrome.tabs.sendMessage(tabId, { type: "PICKSY_SCRAPE" }, (response) => {
-          if (chrome.runtime.lastError) {
-            console.error(`❌ Content script error: ${chrome.runtime.lastError.message}`);
-          } else {
-            scraped = true;
+        chrome.tabs.sendMessage(tabId, { type: "PICKSY_SCRAPE", fromAutoScan: true }, (response) => {
+          if (!chrome.runtime.lastError) {
             scrapedProducts.push(product.title);
+            chrome.tabs.remove(tabId, () => {
+              console.log(`🗑️ Closed tab for: ${product.title.substring(0, 30)}...`);
+            });
+            finalizeAndContinue(3000);
+            return;
           }
 
-          // Close tab
-          chrome.tabs.remove(tabId, () => {
-            console.log(`🗑️ Closed tab for: ${product.title.substring(0, 30)}...`);
-          });
+          const sendError = chrome.runtime.lastError.message;
+          console.warn(`⚠️ Content script message failed: ${sendError}`);
 
-          // Move to next product
-          currentIndex++;
-          setTimeout(scrapeNext, 3000); // 3 second delay between products
+          // Fallback: inject content script and retry once
+          chrome.scripting.executeScript({
+            target: { tabId },
+            files: ['src/content/content.js']
+          }).then(() => {
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, { type: "PICKSY_SCRAPE", fromAutoScan: true }, () => {
+                if (chrome.runtime.lastError) {
+                  console.error(`❌ Retry failed: ${chrome.runtime.lastError.message}`);
+                } else {
+                  scrapedProducts.push(product.title);
+                }
+
+                chrome.tabs.remove(tabId, () => {
+                  console.log(`🗑️ Closed tab for: ${product.title.substring(0, 30)}...`);
+                });
+                finalizeAndContinue(3000);
+              });
+            }, 800);
+          }).catch((injectError) => {
+            console.error(`❌ Content script inject failed: ${injectError.message}`);
+            chrome.tabs.remove(tabId, () => {
+              console.log(`🗑️ Closed tab after inject failure: ${product.title.substring(0, 30)}...`);
+            });
+            finalizeAndContinue(2000);
+          });
         });
       }, 6000); // Wait 6 seconds for page load
 
       // Failsafe: close tab if scraping hangs
       setTimeout(() => {
-        if (!scraped) {
+        if (!isDone) {
           console.warn(`⚠️ Scraping timeout for: ${product.title.substring(0, 30)}...`);
           chrome.tabs.remove(tabId);
-          currentIndex++;
-          setTimeout(scrapeNext, 2000);
+          finalizeAndContinue(2000);
         }
       }, 15000); // 15 second timeout
     });
@@ -381,7 +416,7 @@ function saveToHistory(payload, fromAuto = false) {
       // Stock back notification
       if (
         fromAuto &&
-        settings.priceAlerts &&
+        settings.stockAlerts !== false &&
         lastEntry &&
         !lastEntry.stock &&
         historyEntry.stock

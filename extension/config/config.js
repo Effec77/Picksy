@@ -5,7 +5,7 @@
 
 const Config = {
   // API Configuration
-  GEMINI_API_KEY: 'AIzaSyCdJk3vPqYBxOZktmHcarNwu2OQFRTUA8s', // Replace with your actual key: AIza...
+  GEMINI_API_KEY: null,
   GEMINI_API_URL: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
   
   // Scraping Settings
